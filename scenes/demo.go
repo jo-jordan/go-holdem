@@ -13,7 +13,7 @@ import (
 
 type Demo struct {
 	program         *tea.Program
-	handlers        EventHandlers
+	handlers        DemoEventHandlers
 	logs            []string
 	ready           chan struct{}
 	ticks           int
@@ -23,7 +23,7 @@ type Demo struct {
 	playersViewport viewport.Model
 }
 
-type EventHandlers struct {
+type DemoEventHandlers struct {
 	OnGameCmd func(cmd []byte)
 }
 
@@ -66,7 +66,7 @@ func (d *Demo) WaitUntilReady() {
 	<-d.ready
 }
 
-func (d *Demo) RunWithEventHandlers(handlers EventHandlers) {
+func (d *Demo) RunWithEventHandlers(handlers DemoEventHandlers) {
 	d.handlers = handlers
 	go func() {
 		d.program = tea.NewProgram(d, tea.WithAltScreen())

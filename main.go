@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/jo-jordan/go-holdem/internal"
 	"github.com/jo-jordan/go-holdem/network"
 	"github.com/jo-jordan/go-holdem/scenes"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -16,7 +17,7 @@ func main() {
 	p2p := network.NewP2p()
 	demo := scenes.NewDemo()
 	demo.RunWithEventHandlers(
-		scenes.EventHandlers{
+		scenes.DemoEventHandlers{
 			OnGameCmd: func(cmd []byte) {
 				if p2p.IsHost {
 					p2p.Broadcast(cmd)
@@ -27,7 +28,7 @@ func main() {
 	)
 	demo.WaitUntilReady()
 
-	p2p.Handlers = network.EventHandlers{
+	p2p.Handlers = network.P2pEventHandlers{
 		OnStarted: func(addr string) {
 			demo.AppendLog("listening for connections")
 			demo.AppendLog(fmt.Sprintf("listener ready on %s", addr))
@@ -43,17 +44,11 @@ func main() {
 			demo.AppendLog(content)
 		},
 		OnPeersUpdated: func(peers []peer.ID) {
-			demo.UpdatePlayers(peerIDsToStrings(peers))
+			demo.UpdatePlayers(internal.Map(peers, func(id peer.ID) string {
+				return id.String()
+			}))
 		},
 	}
 
 	p2p.StartHosting()
-}
-
-func peerIDsToStrings(ids []peer.ID) []string {
-	out := make([]string, len(ids))
-	for i, id := range ids {
-		out[i] = id.String()
-	}
-	return out
 }

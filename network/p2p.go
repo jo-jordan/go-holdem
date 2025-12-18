@@ -10,6 +10,8 @@ import (
 	mrand "math/rand"
 	"sync"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -26,21 +28,21 @@ type peerConn struct {
 	id peer.ID
 }
 
-type p2p struct {
+type P2p struct {
 	mu       sync.RWMutex
 	peers    map[peer.ID]*peerConn
-	Handlers EventHandlers
+	Handlers P2pEventHandlers
 	IsHost   bool
 }
 
-func NewP2p() *p2p {
-	return &p2p{
+func NewP2p() *P2p {
+	return &P2p{
 		peers:  make(map[peer.ID]*peerConn),
 		IsHost: false,
 	}
 }
 
-type EventHandlers struct {
+type P2pEventHandlers struct {
 	OnStarted         func(listenAddr string)
 	OnMessageReceived func(from peer.ID, payload []byte)
 	OnSent            func(to peer.ID, payload []byte)
@@ -50,7 +52,7 @@ type EventHandlers struct {
 
 const protocolID = "/go-holdem/1.0.0"
 
-func (p *p2p) SendData(to peer.ID, payload []byte) {
+func (p *P2p) SendData(to peer.ID, payload []byte) {
 	p.mu.RLock()
 	conn, ok := p.peers[to]
 	p.mu.RUnlock()
@@ -69,7 +71,7 @@ func (p *p2p) SendData(to peer.ID, payload []byte) {
 	}
 }
 
-func (p *p2p) Broadcast(payload []byte) {
+func (p *P2p) Broadcast(payload []byte) {
 	p.mu.RLock()
 	peers := make([]*peerConn, 0, len(p.peers))
 	for _, conn := range p.peers {
@@ -86,31 +88,23 @@ func (p *p2p) Broadcast(payload []byte) {
 	}
 }
 
-func (p *p2p) trackPeer(conn *peerConn) {
+func (p *P2p) trackPeer(conn *peerConn) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.peers[conn.id] = conn
 
 	if p.Handlers.OnPeersUpdated != nil {
-		go p.Handlers.OnPeersUpdated(keys(p.peers))
+		go p.Handlers.OnPeersUpdated(maps.Keys(p.peers))
 	}
 }
 
-func keys[K comparable, V any](m map[K]V) []K {
-	out := make([]K, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
-func (p *p2p) dropPeer(id peer.ID) {
+func (p *P2p) dropPeer(id peer.ID) {
 	p.mu.Lock()
 	delete(p.peers, id)
 	p.mu.Unlock()
 }
 
-func (p *p2p) handleStream(s network.Stream) {
+func (p *P2p) handleStream(s network.Stream) {
 	conn := &peerConn{
 		id: s.Conn().RemotePeer(),
 		rw: bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s)),
@@ -119,7 +113,7 @@ func (p *p2p) handleStream(s network.Stream) {
 	go p.readData(conn)
 }
 
-func (p *p2p) readData(conn *peerConn) {
+func (p *P2p) readData(conn *peerConn) {
 	for {
 		str, err := conn.rw.ReadString('\n')
 		if err != nil {
@@ -136,7 +130,7 @@ func (p *p2p) readData(conn *peerConn) {
 	}
 }
 
-func (p *p2p) StartHosting() {
+func (p *P2p) StartHosting() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -178,7 +172,7 @@ func (p *p2p) StartHosting() {
 	<-ctx.Done()
 }
 
-func (p *p2p) makeHost(listenPort int, randseed int64) (host.Host, error) {
+func (p *P2p) makeHost(listenPort int, randseed int64) (host.Host, error) {
 	var r io.Reader
 	if randseed == 0 {
 		r = rand.Reader
@@ -202,7 +196,7 @@ func (p *p2p) makeHost(listenPort int, randseed int64) (host.Host, error) {
 	return libp2p.New(opts...)
 }
 
-func (p *p2p) startPeer(_ context.Context, h host.Host, streamHandler network.StreamHandler) {
+func (p *P2p) startPeer(_ context.Context, h host.Host, streamHandler network.StreamHandler) {
 	h.SetStreamHandler(protocolID, streamHandler)
 
 	// Let's get the actual TCP port from our listen multiaddr, in case we're using 0 (default; random available port).
@@ -220,7 +214,7 @@ func (p *p2p) startPeer(_ context.Context, h host.Host, streamHandler network.St
 	}
 }
 
-func (p *p2p) startPeerAndConnect(_ context.Context, h host.Host, destination string) (*peerConn, error) {
+func (p *P2p) startPeerAndConnect(_ context.Context, h host.Host, destination string) (*peerConn, error) {
 	for _, la := range h.Addrs() {
 		p.Handlers.OnLog(fmt.Sprintf(" - %v\n", la))
 	}
@@ -258,7 +252,7 @@ func (p *p2p) startPeerAndConnect(_ context.Context, h host.Host, destination st
 	return conn, err
 }
 
-func (p *p2p) getHostAddress(ha host.Host) string {
+func (p *P2p) getHostAddress(ha host.Host) string {
 	// Build host multiaddress
 	hostAddr, _ := ma.NewMultiaddr(fmt.Sprintf("/p2p/%s", ha.ID()))
 
