@@ -12,62 +12,34 @@ import (
 )
 
 type Demo struct {
-	program *tea.Program
+	program         *tea.Program
+	handlers        EventHandlers
+	logs            []string
+	ready           chan struct{}
+	ticks           int
+	altscreen       bool
+	players         []string
+	logViewport     viewport.Model
+	playersViewport viewport.Model
 }
 
-type model struct {
-	logs      []string
-	ticks     int
-	altscreen bool
-	players   []string
-	logViewport  viewport.Model
-	playersViewport viewport.Model
+type EventHandlers struct {
+	OnGameCmd func(cmd []byte)
 }
 
 type tickMsg time.Time
 type logMsg struct {
 	content string
 }
+type playersMsg struct {
+	players []string
+}
 
 const sceneWidth = 144
 const playerViewportHeight = 48
 const logViewportHeight = 12
 
-func (d *Demo) New() {
-	d.program = tea.NewProgram(initialModel(), tea.WithAltScreen())
-	if _, err := d.program.Run(); err != nil {
-		d.SendLog(fmt.Sprintf("Alas, there's been an error: %v", err))
-		os.Exit(1)
-	}
-}
-
-func (d *Demo) SendLog(message string) {
-	if d.program != nil {
-		d.program.Send(logMsg{content: message})
-	}
-}
-
-var (
-	playersViewportStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FAFAFA")).
-		Background(lipgloss.Color("#000000ff")).
-		Padding(20).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("228")).
-		BorderBackground(lipgloss.Color("63")).
-		PaddingRight(2)
-
-
-	logViewportStyle = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		PaddingRight(2)
-
-	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render
-)
-
-func initialModel() model {
+func NewDemo() *Demo {
 	logViewport := viewport.New(sceneWidth, logViewportHeight)
 	logViewport.Style = logViewportStyle
 
@@ -77,15 +49,67 @@ func initialModel() model {
 	logViewport.MouseWheelEnabled = true
 	playerViewport.MouseWheelEnabled = true
 
-	return model{
-		logs:      []string{"Start Logging"},
-		ticks:     0,
-		altscreen: true,
-		players:   []string{"Player1", "Player2", "Player3"},
-		logViewport:  logViewport,
+	d := &Demo{
+		logs:            []string{"Start Logging"},
+		ready:           make(chan struct{}),
+		ticks:           0,
+		altscreen:       true,
+		players:         []string{"Player1", "Player2", "Player3"},
+		logViewport:     logViewport,
 		playersViewport: playerViewport,
 	}
+
+	return d
 }
+
+func (d *Demo) WaitUntilReady() {
+	<-d.ready
+}
+
+func (d *Demo) RunWithEventHandlers(handlers EventHandlers) {
+	d.handlers = handlers
+	go func() {
+		d.program = tea.NewProgram(d, tea.WithAltScreen())
+		close(d.ready)
+		if _, err := d.program.Run(); err != nil {
+			d.AppendLog(fmt.Sprintf("Alas, there's been an error: %v", err))
+			os.Exit(1)
+		}
+	}()
+}
+
+func (d *Demo) AppendLog(message string) {
+	if d.program == nil {
+		return
+	}
+	d.program.Send(logMsg{content: message})
+}
+
+func (d *Demo) UpdatePlayers(players []string) {
+	if d.program == nil {
+		return
+	}
+	d.program.Send(playersMsg{players: players})
+}
+
+var (
+	playersViewportStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FAFAFA")).
+				Background(lipgloss.Color("#000000ff")).
+				Padding(20).
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("228")).
+				BorderBackground(lipgloss.Color("63")).
+				PaddingRight(2)
+
+	logViewportStyle = lipgloss.NewStyle().
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("62")).
+				PaddingRight(2)
+
+	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render
+)
 
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
@@ -93,26 +117,30 @@ func tick() tea.Cmd {
 	})
 }
 
-func (m model) Init() tea.Cmd {
+func (d *Demo) Init() tea.Cmd {
 	return tick()
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (d *Demo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tickMsg:
 		{
-			m.ticks += 1
-			return m, tick()
+			d.ticks += 1
+			d.handlers.OnGameCmd(fmt.Appendf(nil, "This is tick cmd: %d.\n", d.ticks))
+			return d, tick()
 		}
-	case logMsg:
-		// Append new log message with timestamp
-
+	case playersMsg:
 		var cmd tea.Cmd
-		m.logs = m.appendLogs(msg.content)
-		
-		m.logViewport, cmd = m.logViewport.Update(m.logs)
-		return m, cmd
+		d.players = msg.players
+		d.playersViewport, cmd = d.playersViewport.Update(d.players)
+		return d, cmd
+	case logMsg:
+		var cmd tea.Cmd
+		d.logs = d.appendLogs(msg.content)
+
+		d.logViewport, cmd = d.logViewport.Update(d.logs)
+		return d, cmd
 	case tea.KeyMsg:
 		{
 			key := msg.String()
@@ -123,48 +151,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if len(key) > 0 {
 				var cmd tea.Cmd
-				m.logs = m.appendLogs(fmt.Sprintf("Key %s pressed.", key))
-				m.logViewport, cmd = m.logViewport.Update(m.logs)
-				return m, cmd
+				d.logs = d.appendLogs(fmt.Sprintf("Key %s pressed.", key))
+				d.logViewport, cmd = d.logViewport.Update(d.logs)
+				return d, cmd
 			}
 		}
 	}
 
-	return m, nil
+	return d, nil
 }
 
-func (m model) appendLogs(content string) []string {
+func (d *Demo) appendLogs(content string) []string {
 	timestamp := time.Now().Format("15:04:05")
-	return append(m.logs, fmt.Sprintf("[%s] %s", timestamp, content))
+	return append(d.logs, fmt.Sprintf("[%s] %s", timestamp, content))
 }
 
-func (m model) View() string {
+func (d *Demo) View() string {
 	// Send the UI for rendering
-	return m.playersInfoView() + "\n" + m.logAreaView() + m.helperView()
+	return d.playersInfoView() + "\n" + d.logAreaView() + d.helperView()
 }
 
-func (m model) playersInfoView() string {
+func (d *Demo) playersInfoView() string {
 	var s strings.Builder
-	fmt.Fprintf(&s, "Players List\n\n(%d ticks)\n", m.ticks)
-	for i, player := range m.players {
-		fmt.Fprintf(&s, "ID: %d, Name: [%s]\n", i, player)
+	fmt.Fprintf(&s, "Players List\n\n(%d ticks)\n", d.ticks)
+	for i, player := range d.players {
+		fmt.Fprintf(&s, "No.: %d, PeerID: [%s]\n", i, player)
 	}
 
-	m.playersViewport.SetContent(s.String())
-	m.playersViewport.GotoBottom()
-	return m.playersViewport.View()
+	d.playersViewport.SetContent(s.String())
+	d.playersViewport.GotoBottom()
+	return d.playersViewport.View()
 }
 
-func (m model) logAreaView() string {
+func (d *Demo) logAreaView() string {
 	var s strings.Builder
-	for _, log := range m.logs {
+	for _, log := range d.logs {
 		fmt.Fprintf(&s, "%s\n", log)
 	}
-	m.logViewport.SetContent(s.String())
-	m.logViewport.GotoBottom()
-	return m.logViewport.View()
+	d.logViewport.SetContent(s.String())
+	d.logViewport.GotoBottom()
+	return d.logViewport.View()
 }
 
-func (m model) helperView() string {
+func (d *Demo) helperView() string {
 	return helpStyle("\n  ↑/↓: Navigate • q: Quit\n")
 }

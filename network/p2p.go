@@ -7,8 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	mrand "math/rand"
+	"sync"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -17,55 +17,168 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 
+	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+type peerConn struct {
+	rw *bufio.ReadWriter
+	id peer.ID
+}
+
 type p2p struct {
-	handlers EventHandlers
+	mu       sync.RWMutex
+	peers    map[peer.ID]*peerConn
+	Handlers EventHandlers
+	IsHost   bool
+}
+
+func NewP2p() *p2p {
+	return &p2p{
+		peers:  make(map[peer.ID]*peerConn),
+		IsHost: false,
+	}
 }
 
 type EventHandlers struct {
 	OnStarted         func(listenAddr string)
 	OnMessageReceived func(from peer.ID, payload []byte)
-	OnSend            func(to peer.ID, payload []byte)
+	OnSent            func(to peer.ID, payload []byte)
+	OnLog             func(content string)
+	OnPeersUpdated    func(peers []peer.ID)
 }
 
-func (p2p *p2p) StartHosting() {
+const protocolID = "/go-holdem/1.0.0"
+
+func (p *p2p) SendData(to peer.ID, payload []byte) {
+	p.mu.RLock()
+	conn, ok := p.peers[to]
+	p.mu.RUnlock()
+	if !ok {
+		if p.Handlers.OnLog != nil {
+			p.Handlers.OnLog(fmt.Sprintf("no connection to %s", to))
+		}
+		return
+	}
+
+	fmt.Fprintf(conn.rw, "%s\n", payload)
+	conn.rw.Flush()
+
+	if p.Handlers.OnSent != nil {
+		go p.Handlers.OnSent(to, payload)
+	}
+}
+
+func (p *p2p) Broadcast(payload []byte) {
+	p.mu.RLock()
+	peers := make([]*peerConn, 0, len(p.peers))
+	for _, conn := range p.peers {
+		peers = append(peers, conn)
+	}
+	p.mu.RUnlock()
+
+	for _, conn := range peers {
+		fmt.Fprintf(conn.rw, "%s\n", payload)
+		conn.rw.Flush()
+		if p.Handlers.OnSent != nil {
+			go p.Handlers.OnSent(conn.id, payload)
+		}
+	}
+}
+
+func (p *p2p) trackPeer(conn *peerConn) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.peers[conn.id] = conn
+
+	if p.Handlers.OnPeersUpdated != nil {
+		go p.Handlers.OnPeersUpdated(keys(p.peers))
+	}
+}
+
+func keys[K comparable, V any](m map[K]V) []K {
+	out := make([]K, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func (p *p2p) dropPeer(id peer.ID) {
+	p.mu.Lock()
+	delete(p.peers, id)
+	p.mu.Unlock()
+}
+
+func (p *p2p) handleStream(s network.Stream) {
+	conn := &peerConn{
+		id: s.Conn().RemotePeer(),
+		rw: bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s)),
+	}
+	p.trackPeer(conn)
+	go p.readData(conn)
+}
+
+func (p *p2p) readData(conn *peerConn) {
+	for {
+		str, err := conn.rw.ReadString('\n')
+		if err != nil {
+			p.dropPeer(conn.id)
+		}
+		if str == "" {
+			return
+		}
+		if str != "\n" {
+			// Green console colour: 	\x1b[32m
+			// Reset console colour: 	\x1b[0m
+			p.Handlers.OnMessageReceived(conn.id, fmt.Appendf(nil, "\x1b[32m%s\x1b[0m ", str))
+		}
+	}
+}
+
+func (p *p2p) StartHosting() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Parse options from the command line
 	listenF := flag.Int("l", 3000, "wait for incoming connections")
 	targetF := flag.String("d", "", "target peer to dial")
-	insecureF := flag.Bool("insecure", false, "use an unencrypted connection")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	flag.Parse()
 
 	if *listenF == 0 {
-		log.Fatal("Please provide a port to bind on with -l")
+		p.Handlers.OnLog("Please provide a port to bind on with -l")
 	}
 
 	// Make a host that listens on the given multiaddress
-	ha, err := p2p.makeBasicHost(*listenF, *insecureF, *seedF)
+	h, err := p.makeHost(*listenF, *seedF)
 	if err != nil {
-		log.Fatal(err)
+		p.Handlers.OnLog(err.Error())
 	}
 
 	if *targetF == "" {
-
-		fullAddr := p2p.startListener(ctx, ha, *listenF, *insecureF)
-
-		if p2p.handlers.OnStarted != nil {
-			go p2p.handlers.OnStarted(fullAddr)
+		p.startPeer(ctx, h, p.handleStream)
+		p.IsHost = true
+		if p.Handlers.OnStarted != nil {
+			fullAddr := p.getHostAddress(h)
+			go p.Handlers.OnStarted(fullAddr)
 		}
-		// Run until canceled.
-		<-ctx.Done()
 	} else {
-		p2p.runSender(ctx, ha, *targetF)
+		conn, err := p.startPeerAndConnect(ctx, h, *targetF)
+		if err != nil {
+			p.Handlers.OnLog(err.Error())
+			return
+		}
+
+		p.trackPeer(conn)
+		go p.readData(conn)
 	}
+
+	// Run until canceled.
+	<-ctx.Done()
 }
 
-func (p2p *p2p) makeBasicHost(listenPort int, insecure bool, randseed int64) (host.Host, error) {
+func (p *p2p) makeHost(listenPort int, randseed int64) (host.Host, error) {
 	var r io.Reader
 	if randseed == 0 {
 		r = rand.Reader
@@ -78,20 +191,74 @@ func (p2p *p2p) makeBasicHost(listenPort int, insecure bool, randseed int64) (ho
 		return nil, err
 	}
 
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort))
+
 	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort)),
+		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(priv),
 		libp2p.DisableRelay(),
-	}
-
-	if insecure {
-		opts = append(opts, libp2p.NoSecurity)
 	}
 
 	return libp2p.New(opts...)
 }
 
-func (p2p *p2p) getHostAddress(ha host.Host) string {
+func (p *p2p) startPeer(_ context.Context, h host.Host, streamHandler network.StreamHandler) {
+	h.SetStreamHandler(protocolID, streamHandler)
+
+	// Let's get the actual TCP port from our listen multiaddr, in case we're using 0 (default; random available port).
+	var port string
+	for _, la := range h.Network().ListenAddresses() {
+		if p, err := la.ValueForProtocol(multiaddr.P_TCP); err == nil {
+			port = p
+			break
+		}
+	}
+
+	if port == "" {
+		p.Handlers.OnLog("was not able to find actual local port")
+		return
+	}
+}
+
+func (p *p2p) startPeerAndConnect(_ context.Context, h host.Host, destination string) (*peerConn, error) {
+	for _, la := range h.Addrs() {
+		p.Handlers.OnLog(fmt.Sprintf(" - %v\n", la))
+	}
+
+	maddr, err := ma.NewMultiaddr(destination)
+	if err != nil {
+		p.Handlers.OnLog(err.Error())
+		return nil, err
+	}
+
+	// Extract the peer ID from the multiaddr.
+	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		p.Handlers.OnLog(err.Error())
+		return nil, err
+	}
+
+	// We have a peer ID and a targetAddr, so we add it to the peerstore
+	// so LibP2P knows how to contact it
+	h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
+
+	s, err := h.NewStream(context.Background(), info.ID, protocolID)
+	if err != nil {
+		p.Handlers.OnLog(err.Error())
+		return nil, err
+	}
+
+	p.Handlers.OnLog("Established connection to destination")
+
+	conn := &peerConn{
+		id: info.ID,
+		rw: bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s)),
+	}
+
+	return conn, err
+}
+
+func (p *p2p) getHostAddress(ha host.Host) string {
 	// Build host multiaddress
 	hostAddr, _ := ma.NewMultiaddr(fmt.Sprintf("/p2p/%s", ha.ID()))
 
@@ -99,84 +266,4 @@ func (p2p *p2p) getHostAddress(ha host.Host) string {
 	// by encapsulating both addresses:
 	addr := ha.Addrs()[0]
 	return addr.Encapsulate(hostAddr).String()
-}
-
-func (p2p *p2p) startListener(_ context.Context, ha host.Host, listenPort int, insecure bool) string {
-	fullAddr := p2p.getHostAddress(ha)
-	// log.Printf("I am %s\n", fullAddr)
-
-	// Set a stream handler on host A. /echo/1.0.0 is
-	// a user-defined protocol name.
-	ha.SetStreamHandler("/echo/1.0.0", func(s network.Stream) {
-		log.Println("listener received new stream")
-		if err := p2p.doEcho(s); err != nil {
-			log.Println(err)
-			s.Reset()
-		} else {
-			s.Close()
-		}
-	})
-
-	return fullAddr
-}
-
-func (p2p *p2p) runSender(_ context.Context, ha host.Host, targetPeer string) {
-	fullAddr := p2p.getHostAddress(ha)
-	log.Printf("I am %s\n", fullAddr)
-
-	// Turn the targetPeer into a multiaddr.
-	maddr, err := ma.NewMultiaddr(targetPeer)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	// Extract the peer ID from the multiaddr.
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	// We have a peer ID and a targetAddr, so we add it to the peerstore
-	// so LibP2P knows how to contact it
-	ha.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
-
-	log.Println("sender opening stream")
-	// make a new stream from host B to host A
-	// it should be handled on host A by the handler we set above because
-	// we use the same /echo/1.0.0 protocol
-	s, err := ha.NewStream(context.Background(), info.ID, "/echo/1.0.0")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	log.Println("sender saying hello")
-	_, err = s.Write([]byte("Hello, world!\n"))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	out, err := io.ReadAll(s)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	log.Printf("read reply: %q\n", out)
-}
-
-// doEcho reads a line of data a stream and writes it back
-func (p2p *p2p) doEcho(s network.Stream) error {
-	buf := bufio.NewReader(s)
-	str, err := buf.ReadString('\n')
-	if err != nil {
-		return err
-	}
-
-	log.Printf("read: %s", str)
-	_, err = s.Write([]byte(str))
-	return err
 }
