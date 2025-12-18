@@ -1,10 +1,15 @@
 package cmd
 
-import "github.com/libp2p/go-libp2p/core/peer"
-
 const (
 	Announcement uint8 = iota + 0
 	Tick
+	StartGame
+	Deal
+	Check
+	Call
+	Raise
+	Fold
+	EndGame
 )
 
 type GameCmd struct {
@@ -12,7 +17,12 @@ type GameCmd struct {
 }
 type AnnouncementCmd struct {
 	GameCmd
-	Peer peer.AddrInfo `json:"peer"`
+	Peer PeerDTO `json:"peer"`
+}
+
+type PeerDTO struct {
+	ID    string   `json:"id"`
+	Addrs []string `json:"addrs"`
 }
 
 type TickCmd struct {

@@ -8,8 +8,8 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/ipfs/go-log/v2 v2.9.0
 	github.com/libp2p/go-libp2p v0.46.0
+	github.com/muesli/reflow v0.3.0
 	github.com/multiformats/go-multiaddr v0.16.0
-	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9
 )
 
 require (
@@ -100,6 +100,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
