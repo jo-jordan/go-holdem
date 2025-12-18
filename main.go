@@ -35,7 +35,7 @@ func main() {
 			demo.AppendLog(fmt.Sprintf("Now run \"./go-holdem -l 3001 -d %s\" on a different terminal", addr))
 		},
 		OnMessageReceived: func(from peer.ID, payload []byte) {
-			demo.AppendLog(fmt.Sprintf("msg from %s: %s", from, payload))
+			//demo.AppendLog(fmt.Sprintf("msg from %s: %s", from, payload))
 		},
 		OnSent: func(to peer.ID, payload []byte) {
 			demo.AppendLog(fmt.Sprintf("sent to %s: %s", to, payload))
