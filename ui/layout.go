@@ -8,12 +8,14 @@ import (
 type LayoutOption struct {
 	Elements []Element
 	Pos      lipgloss.Position
+	IsRoot   bool
 }
 
 type Layout struct {
 	elements   []Element
 	pos        lipgloss.Position
 	focusIndex int
+	isRoot     bool
 }
 
 func newLayout(opt LayoutOption) *Layout {
@@ -21,6 +23,7 @@ func newLayout(opt LayoutOption) *Layout {
 		elements:   opt.Elements,
 		pos:        opt.Pos,
 		focusIndex: -1,
+		isRoot:     opt.IsRoot,
 	}
 
 	l.initCursor()
@@ -37,6 +40,68 @@ func (l *Layout) initCursor() {
 
 func (l *Layout) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
+
+	// Handle move to next/prev into
+	switch msg.(type) {
+	case moveToNextMsg:
+		l.focusIndex = 0
+	case moveToPrevMsg:
+		l.focusIndex = len(l.elements) - 1
+	}
+
+	if !l.focused() {
+		return cmd
+	}
+
+	// Update focused element
+	current := l.elements[l.focusIndex]
+	_, cmd = current.Update(msg)
+
+	if current.Focused() {
+		return cmd
+	}
+
+	cmds := []tea.Cmd{cmd}
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		cmds = append(cmds, l.moveCursor(msg))
+	}
+	return tea.Batch(cmds...)
+}
+
+func (l *Layout) moveCursor(msg tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	switch msg.Type {
+	case tea.KeyTab:
+		cmd = l.moveToNext()
+	case tea.KeyShiftTab:
+		cmd = l.moveToPrev()
+	}
+	return cmd
+}
+
+func (l *Layout) moveToPrev() tea.Cmd {
+	var cmd tea.Cmd
+	l.focusIndex--
+	if l.focusIndex == -1 && !l.isRoot {
+		return cmd
+	} else if l.focusIndex == -1 && l.isRoot {
+		l.focusIndex = len(l.elements) - 1
+	}
+	_, cmd = l.elements[l.focusIndex].Update(moveToPrevMsg{})
+	return cmd
+}
+
+func (l *Layout) moveToNext() tea.Cmd {
+	var cmd tea.Cmd
+	l.focusIndex++
+	if l.focusIndex == len(l.elements) && !l.isRoot {
+		l.focusIndex = -1
+		return cmd
+	} else if l.focusIndex == len(l.elements) && l.isRoot {
+		l.focusIndex = 0
+	}
+	_, cmd = l.elements[l.focusIndex].Update(moveToNextMsg{})
 	return cmd
 }
 

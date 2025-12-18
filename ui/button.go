@@ -37,13 +37,12 @@ func (b *Button) Init() tea.Cmd {
 func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case MoveToPreMsg, MoveToNextMsg:
+	case moveToPrevMsg, moveToNextMsg:
 		b.focus = true
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyTab:
+		case tea.KeyTab, tea.KeyShiftTab:
 			b.focus = false
-			cmd = moveToNextCmd
 		}
 	}
 	return b, cmd
