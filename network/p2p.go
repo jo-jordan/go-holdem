@@ -124,6 +124,11 @@ func (p *P2p) snapshotPeerIDs() []peer.ID {
 
 func (p *P2p) handleStream(s network.Stream) {
 	remoteID := s.Conn().RemotePeer()
+	remoteMA := s.Conn().RemoteMultiaddr()
+	if remoteMA != nil {
+		p.host.Peerstore().AddAddr(remoteID, remoteMA, peerstore.TempAddrTTL)
+	}
+
 	conn := &peerConn{
 		id: remoteID,
 		rw: bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s)),
@@ -138,15 +143,64 @@ func (p *P2p) handleStream(s network.Stream) {
 	go p.readData(conn)
 }
 
+func dtoFromAddrInfo(info peer.AddrInfo) cmd.PeerDTO {
+	addrs := make([]string, 0, len(info.Addrs))
+	for _, addr := range info.Addrs {
+		addrs = append(addrs, addr.String())
+	}
+	return cmd.PeerDTO{
+		ID:    info.ID.String(),
+		Addrs: addrs,
+	}
+}
+
+func addrInfoFromDTO(dto cmd.PeerDTO) (*peer.AddrInfo, error) {
+	id, err := peer.Decode(dto.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]multiaddr.Multiaddr, 0, len(dto.Addrs))
+	for _, s := range dto.Addrs {
+		ma, err := multiaddr.NewMultiaddr(s)
+		if err != nil {
+			return nil, err
+		}
+		addrs = append(addrs, ma)
+	}
+
+	return &peer.AddrInfo{ID: id, Addrs: addrs}, nil
+}
+
 func (p *P2p) announceNewPeer(newPeer peer.AddrInfo) {
 	payload, _ := json.Marshal(cmd.AnnouncementCmd{
 		GameCmd: cmd.GameCmd{
 			Command: cmd.Announcement,
 		},
-		Peer: newPeer,
+		Peer: dtoFromAddrInfo(newPeer),
 	})
 
 	p.Broadcast(payload)
+}
+
+func (p *P2p) ensurePeerStream(ctx context.Context, id peer.ID) error {
+	if _, ok := p.peers.Load(id); ok {
+		return nil // already have an active stream
+	}
+
+	s, err := p.host.NewStream(ctx, id, protocolID)
+	if err != nil {
+		return err
+	}
+
+	conn := &peerConn{
+		id: id,
+		rw: bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s)),
+	}
+
+	p.trackPeer(conn)
+	go p.readData(conn)
+	return nil
 }
 
 // handleMessage processes an incoming message from a peer. TODO need to move this to outside
@@ -169,6 +223,14 @@ func (p *P2p) handleMessage(from peer.ID, data []byte) {
 			return
 		}
 
+		info, err := addrInfoFromDTO(message.Peer)
+		if err != nil {
+			if p.Handlers.OnLog != nil {
+				p.Handlers.OnLog(fmt.Sprintf("bad peer info in announcement from %s: %v", from, err))
+			}
+			return
+		}
+
 		if p.host == nil {
 			if p.Handlers.OnLog != nil {
 				p.Handlers.OnLog("cannot connect to announced peer: host not initialized")
@@ -176,10 +238,16 @@ func (p *P2p) handleMessage(from peer.ID, data []byte) {
 			return
 		}
 
+		p.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.TempAddrTTL)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := p.host.Connect(ctx, message.Peer); err != nil {
+		if err := p.host.Connect(ctx, *info); err != nil {
 			p.Handlers.OnLog(fmt.Sprintf("connect to %s failed: %v", message.Peer.ID, err))
+		}
+
+		if err := p.ensurePeerStream(context.Background(), info.ID); err != nil && p.Handlers.OnLog != nil {
+			p.Handlers.OnLog(fmt.Sprintf("open stream to %s failed: %v", message.Peer.ID, err))
 		}
 	case cmd.Tick:
 		var message cmd.TickCmd
@@ -230,7 +298,6 @@ func readFrame(r *bufio.Reader) ([]byte, error) {
 	}
 	return buf, nil
 }
-
 func (p *P2p) StartHosting() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -241,32 +308,49 @@ func (p *P2p) StartHosting() {
 	flag.Parse()
 
 	if *listenF == 0 {
-		p.Handlers.OnLog("Please provide a port to bind on with -l")
+		if p.Handlers.OnLog != nil {
+			p.Handlers.OnLog("Please provide a port to bind on with -l")
+		}
+		return
 	}
 
 	h, err := p.makeHost(*listenF, *seedF)
 	if err != nil {
-		p.Handlers.OnLog(err.Error())
+		if p.Handlers.OnLog != nil {
+			p.Handlers.OnLog(err.Error())
+		}
+		return
 	}
 
 	p.host = h
 
+	// Always set the stream handler so both hosts and dialers can accept inbound streams.
+	p.startPeer(ctx, h, p.handleStream)
+
 	if *targetF == "" {
-		p.startPeer(ctx, h, p.handleStream)
 		p.IsHost = true
+
 		if p.Handlers.OnStarted != nil {
 			fullAddr := p.getHostAddress(h)
 			go p.Handlers.OnStarted(fullAddr)
 		}
-	} else {
-		conn, err := p.startPeerAndConnect(ctx, h, *targetF)
-		if err != nil {
-			p.Handlers.OnLog(err.Error())
-			return
-		}
-		p.trackPeer(conn)
-		go p.readData(conn)
+
+		<-ctx.Done()
+		return
 	}
+
+	p.IsHost = false
+
+	conn, err := p.startPeerAndConnect(ctx, h, *targetF)
+	if err != nil {
+		if p.Handlers.OnLog != nil {
+			p.Handlers.OnLog(err.Error())
+		}
+		return
+	}
+
+	p.trackPeer(conn)
+	go p.readData(conn)
 
 	<-ctx.Done()
 }

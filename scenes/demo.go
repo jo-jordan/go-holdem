@@ -1,7 +1,6 @@
 package scenes
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/jo-jordan/go-holdem/cmd"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type Demo struct {
@@ -129,16 +128,16 @@ func (d *Demo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		{
 			d.ticks += 1
-			gameCmd := cmd.TickCmd{
-				GameCmd: cmd.GameCmd{
-					Command: cmd.Tick,
-				},
-				Tick: fmt.Sprintf("This is tick cmd: %d.", d.ticks),
-			}
-			cmdData, err := json.Marshal(gameCmd)
-			if err == nil && d.handlers.OnGameCmd != nil {
-				d.handlers.OnGameCmd(cmdData)
-			}
+			//gameCmd := cmd.TickCmd{
+			//	GameCmd: cmd.GameCmd{
+			//		Command: cmd.Tick,
+			//	},
+			//	Tick: fmt.Sprintf("This is tick cmd: %d.", d.ticks),
+			//}
+			//cmdData, err := json.Marshal(gameCmd)
+			//if err == nil && d.handlers.OnGameCmd != nil {
+			//	d.handlers.OnGameCmd(cmdData)
+			//}
 			return d, tick()
 		}
 	case playersMsg:
@@ -199,7 +198,8 @@ func (d *Demo) logAreaView() string {
 	for _, log := range d.logs {
 		fmt.Fprintf(&s, "%s\n", log)
 	}
-	d.logViewport.SetContent(s.String())
+	wrapped := wordwrap.String(s.String(), sceneWidth)
+	d.logViewport.SetContent(wrapped)
 	d.logViewport.GotoBottom()
 	return d.logViewport.View()
 }
