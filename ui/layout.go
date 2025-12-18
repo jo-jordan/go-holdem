@@ -38,7 +38,8 @@ func (l *Layout) initCursor() {
 	}
 }
 
-func (l *Layout) Update(msg tea.Msg) tea.Cmd {
+func (l *Layout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var model tea.Model
 	var cmd tea.Cmd
 
 	// Handle move to next/prev into
@@ -50,59 +51,63 @@ func (l *Layout) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	if !l.focused() {
-		return cmd
+		return nil, cmd
 	}
 
 	// Update focused element
 	current := l.elements[l.focusIndex]
-	_, cmd = current.Update(msg)
+	model, cmd = current.Update(msg)
 
 	if current.Focused() {
-		return cmd
+		return model, cmd
 	}
 
 	cmds := []tea.Cmd{cmd}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		cmds = append(cmds, l.moveCursor(msg))
+		model, cmd = l.moveCursor(msg)
+		cmds = append(cmds, cmd)
 	}
-	return tea.Batch(cmds...)
+	return model, tea.Batch(cmds...)
 }
 
-func (l *Layout) moveCursor(msg tea.KeyMsg) tea.Cmd {
+func (l *Layout) moveCursor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var model tea.Model
 	var cmd tea.Cmd
 	switch msg.Type {
 	case tea.KeyTab:
-		cmd = l.moveToNext()
+		model, cmd = l.moveToNext()
 	case tea.KeyShiftTab:
-		cmd = l.moveToPrev()
+		model, cmd = l.moveToPrev()
 	}
-	return cmd
+	return model, cmd
 }
 
-func (l *Layout) moveToPrev() tea.Cmd {
+func (l *Layout) moveToPrev() (tea.Model, tea.Cmd) {
+	var model tea.Model
 	var cmd tea.Cmd
 	l.focusIndex--
 	if l.focusIndex == -1 && !l.isRoot {
-		return cmd
+		return model, cmd
 	} else if l.focusIndex == -1 && l.isRoot {
 		l.focusIndex = len(l.elements) - 1
 	}
-	_, cmd = l.elements[l.focusIndex].Update(moveToPrevMsg{})
-	return cmd
+	model, cmd = l.elements[l.focusIndex].Update(moveToPrevMsg{})
+	return model, cmd
 }
 
-func (l *Layout) moveToNext() tea.Cmd {
+func (l *Layout) moveToNext() (tea.Model, tea.Cmd) {
+	var model tea.Model
 	var cmd tea.Cmd
 	l.focusIndex++
 	if l.focusIndex == len(l.elements) && !l.isRoot {
 		l.focusIndex = -1
-		return cmd
+		return model, cmd
 	} else if l.focusIndex == len(l.elements) && l.isRoot {
 		l.focusIndex = 0
 	}
-	_, cmd = l.elements[l.focusIndex].Update(moveToNextMsg{})
-	return cmd
+	model, cmd = l.elements[l.focusIndex].Update(moveToNextMsg{})
+	return model, cmd
 }
 
 func (l Layout) view() []string {
@@ -132,7 +137,12 @@ func (r *Row) Init() tea.Cmd {
 }
 
 func (r *Row) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return r, r.layout.Update(msg)
+	model, cmd := r.layout.Update(msg)
+	if model == nil {
+		return r, cmd
+	} else {
+		return model, cmd
+	}
 }
 
 func (r *Row) View() string {
@@ -158,7 +168,12 @@ func (c *Column) Init() tea.Cmd {
 }
 
 func (c *Column) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return c, c.layout.Update(msg)
+	model, cmd := c.layout.Update(msg)
+	if model == nil {
+		return c, cmd
+	} else {
+		return model, cmd
+	}
 }
 
 func (c *Column) View() string {

@@ -5,16 +5,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type ButtonAction func() tea.Model
+
+func defaultButtonAction() tea.Model {
+	return nil
+}
+
 type Button struct {
-	value string
-	focus bool
-	style lipgloss.Style
+	value  string
+	focus  bool
+	style  lipgloss.Style
+	action ButtonAction
 }
 
 type ButtonOption struct {
-	Value string
-	Focus bool
-	Style *lipgloss.Style
+	Value  string
+	Focus  bool
+	Style  *lipgloss.Style
+	Action ButtonAction
 }
 
 func NewButton(opt ButtonOption) *Button {
@@ -27,6 +35,11 @@ func NewButton(opt ButtonOption) *Button {
 	} else {
 		b.style = *opt.Style
 	}
+	if opt.Action == nil {
+		b.action = defaultButtonAction
+	} else {
+		b.action = opt.Action
+	}
 	return b
 }
 
@@ -35,6 +48,7 @@ func (b *Button) Init() tea.Cmd {
 }
 
 func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var model tea.Model
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case moveToPrevMsg, moveToNextMsg:
@@ -43,9 +57,11 @@ func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyTab, tea.KeyShiftTab:
 			b.focus = false
+		case tea.KeyEnter:
+			model = b.action()
 		}
 	}
-	return b, cmd
+	return model, cmd
 }
 
 func (b Button) View() string {
