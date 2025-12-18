@@ -1,13 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
-	"github.com/jo-jordan/go-holdem/entities"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/jo-jordan/go-holdem/screens"
 )
 
 func main() {
-	pack := entities.NewPack()
-	pack.Shuffle()
-	fmt.Println(pack)
+	p := tea.NewProgram(screens.NewStartSreen(), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
