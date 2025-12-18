@@ -1,6 +1,7 @@
 package scenes
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jo-jordan/go-holdem/cmd"
 )
 
 type Demo struct {
@@ -127,7 +129,16 @@ func (d *Demo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		{
 			d.ticks += 1
-			d.handlers.OnGameCmd(fmt.Appendf(nil, "This is tick cmd: %d.\n", d.ticks))
+			gameCmd := cmd.TickCmd{
+				GameCmd: cmd.GameCmd{
+					Command: cmd.Tick,
+				},
+				Tick: fmt.Sprintf("This is tick cmd: %d.", d.ticks),
+			}
+			cmdData, err := json.Marshal(gameCmd)
+			if err == nil && d.handlers.OnGameCmd != nil {
+				d.handlers.OnGameCmd(cmdData)
+			}
 			return d, tick()
 		}
 	case playersMsg:
