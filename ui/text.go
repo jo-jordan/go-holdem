@@ -62,9 +62,7 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyEnter, tea.KeyTab:
-			i.text.Blur()
-		case tea.KeyShiftTab:
+		case tea.KeyShiftTab, tea.KeyTab:
 			i.text.Blur()
 		}
 	case moveToNextMsg, moveToPrevMsg:
@@ -72,7 +70,7 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 	i.text, cmd = i.text.Update(msg)
-	return i, tea.Batch(append(cmds, cmd)...)
+	return nil, tea.Batch(append(cmds, cmd)...)
 }
 
 func (i *InputText) View() string {

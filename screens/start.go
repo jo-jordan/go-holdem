@@ -18,7 +18,7 @@ func NewStartSreen() StartScreen {
 		IsRoot: true,
 		Elements: []ui.Element{
 			ui.NewInputText(ui.InputTextOption{
-				Title: "Enter your name:",
+				Title: "Enter your name: ",
 				Focus: true,
 			}),
 			ui.NewRow(ui.LayoutOption{
@@ -56,7 +56,9 @@ func (s StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		s.style = s.style.
 			Width(msg.Width).
-			Height(msg.Height)
+			Height(msg.Height).
+			AlignVertical(lipgloss.Center).
+			AlignHorizontal(lipgloss.Center)
 	case error:
 		s.err = msg
 		return s, nil
