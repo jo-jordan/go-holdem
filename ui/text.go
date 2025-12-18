@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -58,25 +57,22 @@ func (i *InputText) Init() tea.Cmd {
 }
 
 func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter, tea.KeyTab:
 			i.text.Blur()
-			cmd = moveToNextCmd
 		case tea.KeyShiftTab:
 			i.text.Blur()
-			cmd = moveToPrevCmd
-		default:
-			i.text, cmd = i.text.Update(msg)
 		}
-	case MoveToPreMsg, MoveToNextMsg:
+	case moveToNextMsg, moveToPrevMsg:
 		cmd = i.text.Focus()
-	case cursor.BlinkMsg:
-		i.text, cmd = i.text.Update(msg)
+		cmds = append(cmds, cmd)
 	}
-	return i, cmd
+	i.text, cmd = i.text.Update(msg)
+	return i, tea.Batch(append(cmds, cmd)...)
 }
 
 func (i *InputText) View() string {

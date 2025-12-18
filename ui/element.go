@@ -7,14 +7,6 @@ type Element interface {
 	Focused() bool
 }
 
-type MoveToNextMsg struct{}
+type moveToPrevMsg struct{}
 
-func moveToNextCmd() tea.Msg {
-	return MoveToNextMsg{}
-}
-
-type MoveToPreMsg struct{}
-
-func moveToPrevCmd() tea.Msg {
-	return MoveToPreMsg{}
-}
+type moveToNextMsg struct{}
