@@ -22,7 +22,7 @@ func main() {
 			OnStarted: func(addr string) {
 				demo.SendLog("listening for connections")
 				demo.SendLog(fmt.Sprintf("listener ready on %s", addr))
-				demo.SendLog(fmt.Sprintf("Now run \"./go-holdem -l 3001 -d %s\" on a different terminal\n", addr))
+				demo.SendLog(fmt.Sprintf("Now run \"./go-holdem -l 3001 -d %s\" on a different terminal", addr))
 			},
 			OnMessageReceived: func(from peer.ID, payload []byte) {
 				log.Printf("msg from %s: %s\n", from, payload)

@@ -3,8 +3,10 @@ package scenes
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -14,16 +16,22 @@ type Demo struct {
 }
 
 type model struct {
-	log       string
+	logs      []string
 	ticks     int
 	altscreen bool
 	players   []string
+	logViewport  viewport.Model
+	playersViewport viewport.Model
 }
 
 type tickMsg time.Time
 type logMsg struct {
 	content string
 }
+
+const sceneWidth = 144
+const playerViewportHeight = 48
+const logViewportHeight = 12
 
 func (d *Demo) New() {
 	d.program = tea.NewProgram(initialModel(), tea.WithAltScreen())
@@ -39,12 +47,43 @@ func (d *Demo) SendLog(message string) {
 	}
 }
 
+var (
+	playersViewportStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#000000ff")).
+		Padding(20).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("228")).
+		BorderBackground(lipgloss.Color("63")).
+		PaddingRight(2)
+
+
+	logViewportStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		PaddingRight(2)
+
+	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render
+)
+
 func initialModel() model {
+	logViewport := viewport.New(sceneWidth, logViewportHeight)
+	logViewport.Style = logViewportStyle
+
+	playerViewport := viewport.New(sceneWidth, playerViewportHeight)
+	playerViewport.Style = playersViewportStyle
+
+	logViewport.MouseWheelEnabled = true
+	playerViewport.MouseWheelEnabled = true
+
 	return model{
-		log:       "",
+		logs:      []string{"Start Logging"},
 		ticks:     0,
 		altscreen: true,
 		players:   []string{"Player1", "Player2", "Player3"},
+		logViewport:  logViewport,
+		playersViewport: playerViewport,
 	}
 }
 
@@ -68,19 +107,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case logMsg:
 		// Append new log message with timestamp
-		timestamp := time.Now().Format("15:04:05")
-		m.log += fmt.Sprintf("[%s] %s\n", timestamp, msg.content)
-		return m, nil
+
+		var cmd tea.Cmd
+		m.logs = m.appendLogs(msg.content)
+		
+		m.logViewport, cmd = m.logViewport.Update(m.logs)
+		return m, cmd
 	case tea.KeyMsg:
 		{
 			key := msg.String()
-			if len(key) > 0 {
-				m.log += fmt.Sprintf("Key %s pressed.\n", key)
-			}
 			switch key {
 			case "q":
 				tea.ClearScreen()
 				os.Exit(1)
+			}
+			if len(key) > 0 {
+				var cmd tea.Cmd
+				m.logs = m.appendLogs(fmt.Sprintf("Key %s pressed.", key))
+				m.logViewport, cmd = m.logViewport.Update(m.logs)
+				return m, cmd
 			}
 		}
 	}
@@ -88,34 +133,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-var style = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#FAFAFA")).
-	Background(lipgloss.Color("#7D56F4")).
-	Padding(20).
-	Width(144).
-	BorderForeground(lipgloss.Color("228")).
-	BorderBackground(lipgloss.Color("63")).
-	BorderTop(true).
-	BorderLeft(true).
-	Align(lipgloss.Center)
+func (m model) appendLogs(content string) []string {
+	timestamp := time.Now().Format("15:04:05")
+	return append(m.logs, fmt.Sprintf("[%s] %s", timestamp, content))
+}
 
 func (m model) View() string {
-	// The header
-	s := fmt.Sprintf("Players List?\n\n(%d ticks)\n", m.ticks)
+	// Send the UI for rendering
+	return m.playersInfoView() + "\n" + m.logAreaView() + m.helperView()
+}
 
-	// Iterate over our choices
+func (m model) playersInfoView() string {
+	var s strings.Builder
+	fmt.Fprintf(&s, "Players List\n\n(%d ticks)\n", m.ticks)
 	for i, player := range m.players {
-
-		// Render the row
-		s += fmt.Sprintf("ID: %d, Name: [%s]\n", i, player)
+		fmt.Fprintf(&s, "ID: %d, Name: [%s]\n", i, player)
 	}
 
-	s += "\n--- Logs ---\n" + m.log
+	m.playersViewport.SetContent(s.String())
+	m.playersViewport.GotoBottom()
+	return m.playersViewport.View()
+}
 
-	// The footer
-	s += "\nPress q to quit.\n"
+func (m model) logAreaView() string {
+	var s strings.Builder
+	for _, log := range m.logs {
+		fmt.Fprintf(&s, "%s\n", log)
+	}
+	m.logViewport.SetContent(s.String())
+	m.logViewport.GotoBottom()
+	return m.logViewport.View()
+}
 
-	// Send the UI for rendering
-	return style.Render(s)
+func (m model) helperView() string {
+	return helpStyle("\n  ↑/↓: Navigate • q: Quit\n")
 }
