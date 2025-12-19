@@ -32,23 +32,8 @@ func NewController() *MainController {
 }
 
 func (ctrl *MainController) Run(dest string, port int) {
-	mainScene := ctrl.mainScene
-	p2p := ctrl.p2p
-	mainScene.RunWithEventHandlers(
-		scenes.MainSceneEventHandlers{
-			OnTickCmd: func(cmd cmd.TickCmd) {
-				if p2p.IsHost {
-					p2p.Broadcast(cmd)
-				}
-			},
-			OnSendChatMessage: func(chatCmd cmd.ChatCmd) {
-				p2p.Broadcast(chatCmd)
-			},
-		},
-	)
-	mainScene.WaitUntilReady()
-
-	p2p.StartHosting(dest, port)
+	ctrl.mainScene.Run()
+	ctrl.p2p.StartHosting(dest, port)
 
 	for {
 		select {
@@ -101,4 +86,11 @@ func (ctrl *MainController) handleNetworkEvents(evt events.NetworkEvent) {
 
 }
 
-func (ctrl *MainController) handleScenesEvents(cmd cmd.Cmd) {}
+func (ctrl *MainController) handleScenesEvents(evt events.SceneEvent) {
+	switch e := evt.(type) {
+	case events.SceneReady:
+		ctrl.mainScene.AppendLog("MainScene Ready!")
+	case events.SceneChatMessage:
+		ctrl.p2p.Broadcast(e.ChatCmd)
+	}
+}

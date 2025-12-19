@@ -19,9 +19,7 @@ import (
 type MainScene struct {
 	out             chan events.SceneEvent
 	program         *tea.Program
-	handlers        MainSceneEventHandlers
 	logs            []string
-	ready           chan struct{}
 	ticks           int
 	altscreen       bool
 	players         []string
@@ -31,11 +29,6 @@ type MainScene struct {
 	chatMsgViewport viewport.Model
 	chatMessages    []string
 	PlayerID        string
-}
-
-type MainSceneEventHandlers struct {
-	OnTickCmd         func(TickCmd cmd.TickCmd)
-	OnSendChatMessage func(chatCmd cmd.ChatCmd)
 }
 
 type tickMsg time.Time
@@ -80,7 +73,6 @@ func NewMainScene(out chan events.SceneEvent) *MainScene {
 	d := &MainScene{
 		out:             out,
 		logs:            []string{"Start Logging"},
-		ready:           make(chan struct{}),
 		ticks:           0,
 		altscreen:       true,
 		players:         []string{},
@@ -93,15 +85,10 @@ func NewMainScene(out chan events.SceneEvent) *MainScene {
 	return d
 }
 
-func (d *MainScene) WaitUntilReady() {
-	<-d.ready
-}
-
-func (d *MainScene) RunWithEventHandlers(handlers MainSceneEventHandlers) {
-	d.handlers = handlers
+func (d *MainScene) Run() {
 	go func() {
 		d.program = tea.NewProgram(d, tea.WithAltScreen())
-		close(d.ready)
+		d.out <- events.SceneReady{}
 		if _, err := d.program.Run(); err != nil {
 			d.AppendLog(fmt.Sprintf("Alas, there's been an error: %v", err))
 			os.Exit(1)
@@ -152,7 +139,7 @@ var (
 
 func tick() tea.Cmd {
 	return tea.Batch(
-		tea.Tick(time.Millisecond, func(t time.Time) tea.Msg {
+		tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
 			return tickMsg(t)
 		}),
 		textarea.Blink,
@@ -182,10 +169,10 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return d, tick()
 		}
 	case playersMsg:
-		var cmd tea.Cmd
+		var c tea.Cmd
 		d.players = msg.players
-		d.playersViewport, cmd = d.playersViewport.Update(d.players)
-		return d, cmd
+		d.playersViewport, c = d.playersViewport.Update(d.players)
+		return d, c
 	case logMsg:
 		var c tea.Cmd
 		d.logs = d.appendLogs(msg.content, msg.isError)
@@ -213,21 +200,25 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.chatMsgViewport.SetContent(lipgloss.NewStyle().Width(d.chatMsgViewport.Width).Render(strings.Join(d.chatMessages, "\n")))
 			d.textarea.Reset()
 			d.chatMsgViewport.GotoBottom()
-			if d.handlers.OnSendChatMessage != nil {
-				chatCmd := cmd.ChatCmd{
+			evt := events.SceneChatMessage{
+				ChatCmd: cmd.ChatCmd{
 					GameCmd: cmd.GameCmd{
 						Command: cmd.Chat,
 					},
 					SenderID: d.PlayerID,
 					Content:  cm,
-				}
-				d.handlers.OnSendChatMessage(chatCmd)
+				},
 			}
+			d.emit(evt)
 		}
 		return d, tea.Batch(tiCmd, vpCmd)
 	}
 
 	return d, nil
+}
+
+func (d *MainScene) emit(evt events.SceneEvent) {
+	d.out <- evt
 }
 
 func (d *MainScene) appendLogs(content string, isErr bool) []string {
