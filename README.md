@@ -6,10 +6,10 @@ go-holdem is a multi-player (p2p network) Hold'em poker game run in a terminal.
 
 ```mermaid
 graph TB
-    Network(Network) -- cmd events --> Controller((Controllers))
-    Controller -- cmd --> Scene(Scenes)
-    Scene -- cmd --> Controller
-    Controller --cmd events --> Network
+    Network(Network) -- NetworkEvent --> Controller((Controllers))
+    Controller -- invoke --> Scene(Scenes)
+    Scene -- SceneEvent --> Controller
+    Controller -- invoke --> Network
 
     style Network fill:#961,stroke:#333,stroke-width:4px
     style Scene fill:#969,stroke:#333,stroke-width:4px
