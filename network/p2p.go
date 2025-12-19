@@ -171,7 +171,7 @@ func (p *P2p) ensurePeerStream(ctx context.Context, id peer.ID) error {
 	return nil
 }
 
-// handleMessage processes an incoming message from a peer. TODO need to move this to outside
+// handleMessage processes an incoming message from a peer.
 func (p *P2p) handleMessage(from peer.ID, data []byte) {
 	var header cmd.GameCmd
 	if err := json.Unmarshal(data, &header); err != nil {
