@@ -37,10 +37,10 @@ func (ctrl *MainController) Run(dest string, port int) {
 
 	for {
 		select {
-		case c := <-ctrl.netToScene:
-			ctrl.handleNetworkEvents(c)
-		case c := <-ctrl.sceneToNet:
-			ctrl.handleScenesEvents(c)
+		case evt := <-ctrl.netToScene:
+			ctrl.handleNetworkEvents(evt)
+		case evt := <-ctrl.sceneToNet:
+			ctrl.handleScenesEvents(evt)
 		}
 	}
 }
