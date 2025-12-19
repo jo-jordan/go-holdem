@@ -90,6 +90,25 @@ func (p *P2p) Broadcast(cmd cmd.Cmd) {
 	})
 }
 
+func (p *P2p) BroadcastExclude(cmd cmd.Cmd, excludes []peer.ID) {
+	payload, _ := json.Marshal(cmd)
+	excludeMap := make(map[peer.ID]struct{})
+	for _, id := range excludes {
+		excludeMap[id] = struct{}{}
+	}
+
+	p.peers.Range(func(_, value any) bool {
+		conn := value.(*peerConn)
+		if _, excluded := excludeMap[conn.id]; excluded {
+			return true // skip excluded peer
+		}
+		if err := writeFrame(conn.rw.Writer, payload); err != nil {
+			p.emitErr(fmt.Errorf("broadcast to %s failed: %v", conn.id, err))
+		}
+		return true
+	})
+}
+
 func (p *P2p) trackPeer(conn *peerConn) {
 	p.peers.Store(conn.id, conn)
 
@@ -148,7 +167,7 @@ func (p *P2p) announceNewPeer(newPeer peer.AddrInfo) {
 		Peer: cmd.PeerDTOFromAddrInfo(newPeer),
 	}
 
-	p.Broadcast(payload)
+	p.BroadcastExclude(payload, []peer.ID{newPeer.ID})
 }
 
 func (p *P2p) ensurePeerStream(ctx context.Context, id peer.ID) error {
