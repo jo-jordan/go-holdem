@@ -6,14 +6,13 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
-	mrand "math/rand"
 	"sync"
 	"time"
 
 	"github.com/jo-jordan/go-holdem/cmd"
+	"github.com/jo-jordan/go-holdem/events"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -31,27 +30,23 @@ type peerConn struct {
 }
 
 type P2p struct {
-	peers    sync.Map // key: peer.ID, value: *peerConn
-	host     host.Host
-	Handlers P2pEventHandlers
-	IsHost   bool
+	out    chan<- events.NetworkEvent
+	peers  sync.Map // key: peer.ID, value: *peerConn
+	host   host.Host
+	IsHost bool
 }
 
-func NewP2p() *P2p {
+func NewP2p(out chan events.NetworkEvent) *P2p {
 	return &P2p{
 		IsHost: false,
+		out:    out,
 	}
 }
 
-type P2pEventHandlers struct {
-	OnStarted      func(playerID peer.ID, listenAddr string)
-	OnCmdReceived  func(from peer.ID, command cmd.Command, payload []byte)
-	OnSent         func(to peer.ID, payload []byte)
-	OnLog          func(content string)
-	OnPeersUpdated func(peers []peer.ID)
-}
-
-const protocolID = "/go-holdem/1.0.0"
+const (
+	protocolID  = "/go-holdem/1.0.0"
+	defaultPort = 3000
+)
 
 func writeFrame(w *bufio.Writer, payload []byte) error {
 	if err := binary.Write(w, binary.BigEndian, uint32(len(payload))); err != nil {
@@ -66,31 +61,30 @@ func writeFrame(w *bufio.Writer, payload []byte) error {
 func (p *P2p) SendData(to peer.ID, payload []byte) {
 	value, ok := p.peers.Load(to)
 	if !ok {
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(fmt.Sprintf("no connection to %s", to))
-		}
+		p.emitErr(fmt.Errorf("no connection to %s", to))
 		return
 	}
 
 	conn := value.(*peerConn)
-	if err := writeFrame(conn.rw.Writer, payload); err != nil && p.Handlers.OnLog != nil {
-		p.Handlers.OnLog(fmt.Sprintf("send to %s failed: %v", to, err))
+	if err := writeFrame(conn.rw.Writer, payload); err != nil {
+		p.emitErr(fmt.Errorf("send to %s failed: %v", to, err))
 		return
 	}
+}
 
-	if p.Handlers.OnSent != nil {
-		go p.Handlers.OnSent(to, payload)
+func (p *P2p) emitErr(err error) {
+	evt := events.NetworkError{
+		Err: err,
 	}
+	p.emit(evt)
 }
 
 func (p *P2p) Broadcast(cmd cmd.Cmd) {
 	payload, _ := json.Marshal(cmd)
 	p.peers.Range(func(_, value any) bool {
 		conn := value.(*peerConn)
-		if err := writeFrame(conn.rw.Writer, payload); err != nil && p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(fmt.Sprintf("broadcast to %s failed: %v", conn.id, err))
-		} else if p.Handlers.OnSent != nil {
-			go p.Handlers.OnSent(conn.id, payload)
+		if err := writeFrame(conn.rw.Writer, payload); err != nil {
+			p.emitErr(fmt.Errorf("broadcast to %s failed: %v", conn.id, err))
 		}
 		return true
 	})
@@ -99,17 +93,19 @@ func (p *P2p) Broadcast(cmd cmd.Cmd) {
 func (p *P2p) trackPeer(conn *peerConn) {
 	p.peers.Store(conn.id, conn)
 
-	if p.Handlers.OnPeersUpdated != nil {
-		go p.Handlers.OnPeersUpdated(p.snapshotPeerIDs())
+	evt := events.PeersUpdated{
+		Peers: p.snapshotPeerIDs(),
 	}
+	p.emit(evt)
 }
 
 func (p *P2p) dropPeer(id peer.ID) {
 	p.peers.Delete(id)
 
-	if p.Handlers.OnPeersUpdated != nil {
-		go p.Handlers.OnPeersUpdated(p.snapshotPeerIDs())
+	evt := events.PeersUpdated{
+		Peers: p.snapshotPeerIDs(),
 	}
+	p.emit(evt)
 }
 
 func (p *P2p) snapshotPeerIDs() []peer.ID {
@@ -144,41 +140,12 @@ func (p *P2p) handleStream(s network.Stream) {
 	go p.readData(conn)
 }
 
-func dtoFromAddrInfo(info peer.AddrInfo) cmd.PeerDTO {
-	addrs := make([]string, 0, len(info.Addrs))
-	for _, addr := range info.Addrs {
-		addrs = append(addrs, addr.String())
-	}
-	return cmd.PeerDTO{
-		ID:    info.ID.String(),
-		Addrs: addrs,
-	}
-}
-
-func addrInfoFromDTO(dto cmd.PeerDTO) (*peer.AddrInfo, error) {
-	id, err := peer.Decode(dto.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	addrs := make([]multiaddr.Multiaddr, 0, len(dto.Addrs))
-	for _, s := range dto.Addrs {
-		ma, err := multiaddr.NewMultiaddr(s)
-		if err != nil {
-			return nil, err
-		}
-		addrs = append(addrs, ma)
-	}
-
-	return &peer.AddrInfo{ID: id, Addrs: addrs}, nil
-}
-
 func (p *P2p) announceNewPeer(newPeer peer.AddrInfo) {
 	payload := cmd.AnnouncementCmd{
 		GameCmd: cmd.GameCmd{
 			Command: cmd.Announcement,
 		},
-		Peer: dtoFromAddrInfo(newPeer),
+		Peer: cmd.PeerDTOFromAddrInfo(newPeer),
 	}
 
 	p.Broadcast(payload)
@@ -208,9 +175,7 @@ func (p *P2p) ensurePeerStream(ctx context.Context, id peer.ID) error {
 func (p *P2p) handleMessage(from peer.ID, data []byte) {
 	var header cmd.GameCmd
 	if err := json.Unmarshal(data, &header); err != nil {
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(fmt.Sprintf("invalid payload from %s: %v", from, err))
-		}
+		p.emitErr(fmt.Errorf("invalid payload from %s: %v", from, err))
 		return
 	}
 
@@ -218,24 +183,18 @@ func (p *P2p) handleMessage(from peer.ID, data []byte) {
 	case cmd.Announcement:
 		var message cmd.AnnouncementCmd
 		if err := json.Unmarshal(data, &message); err != nil {
-			if p.Handlers.OnLog != nil {
-				p.Handlers.OnLog(fmt.Sprintf("bad announcement from %s: %v", from, err))
-			}
+			p.emitErr(fmt.Errorf("bad announcement from %s: %v", from, err))
 			return
 		}
 
-		info, err := addrInfoFromDTO(message.Peer)
+		info, err := message.Peer.AddrInfo()
 		if err != nil {
-			if p.Handlers.OnLog != nil {
-				p.Handlers.OnLog(fmt.Sprintf("bad peer info in announcement from %s: %v", from, err))
-			}
+			p.emitErr(fmt.Errorf("bad peer info in announcement from %s: %v", from, err))
 			return
 		}
 
 		if p.host == nil {
-			if p.Handlers.OnLog != nil {
-				p.Handlers.OnLog("cannot connect to announced peer: host not initialized")
-			}
+			p.emitErr(fmt.Errorf("cannot connect to announced peer: host not initialized"))
 			return
 		}
 
@@ -244,16 +203,19 @@ func (p *P2p) handleMessage(from peer.ID, data []byte) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := p.host.Connect(ctx, *info); err != nil {
-			p.Handlers.OnLog(fmt.Sprintf("connect to %s failed: %v", message.Peer.ID, err))
+			p.emitErr(fmt.Errorf("connect to %s failed: %v", message.Peer.ID, err))
 		}
 
-		if err := p.ensurePeerStream(context.Background(), info.ID); err != nil && p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(fmt.Sprintf("open stream to %s failed: %v", message.Peer.ID, err))
+		if err := p.ensurePeerStream(context.Background(), info.ID); err != nil {
+			p.emitErr(fmt.Errorf("open stream to %s failed: %v", message.Peer.ID, err))
 		}
 	default:
-		if p.Handlers.OnCmdReceived != nil {
-			go p.Handlers.OnCmdReceived(from, header.Command, data)
+		evt := events.CmdReceived{
+			From:    from,
+			Header:  header.Command,
+			Payload: data,
 		}
+		p.emit(evt)
 	}
 }
 
@@ -261,8 +223,8 @@ func (p *P2p) readData(conn *peerConn) {
 	for {
 		payload, err := readFrame(conn.rw.Reader)
 		if err != nil {
-			if err != io.EOF && p.Handlers.OnLog != nil {
-				p.Handlers.OnLog(fmt.Sprintf("read from %s failed: %v", conn.id, err))
+			if err != io.EOF {
+				p.emitErr(fmt.Errorf("read from %s failed: %v", conn.id, err))
 			}
 			p.dropPeer(conn.id)
 			return
@@ -287,77 +249,68 @@ func readFrame(r *bufio.Reader) ([]byte, error) {
 	}
 	return buf, nil
 }
-func (p *P2p) StartHosting() {
+
+func (p *P2p) StartHosting(dest string, port int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	listenF := flag.Int("l", 3000, "wait for incoming connections")
-	targetF := flag.String("d", "", "target peer to dial")
-	seedF := flag.Int64("seed", 0, "set random seed for id generation")
-	flag.Parse()
-
-	if *listenF == 0 {
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog("Please provide a port to bind on with -l")
-		}
-		return
-	}
-
-	h, err := p.makeHost(*listenF, *seedF)
+	h, err := p.makeHost(port)
 	if err != nil {
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(err.Error())
-		}
+
+		p.emitErr(fmt.Errorf("failed to create libp2p host: %v", err))
+
 		return
 	}
 
 	p.host = h
-
-	// Always set the stream handler so both hosts and dialers can accept inbound streams.
 	p.startPeer(ctx, h, p.handleStream)
 
-	if p.Handlers.OnStarted != nil {
-		fullAddr := p.getHostAddress(h)
-		go p.Handlers.OnStarted(p.host.ID(), fullAddr)
-	}
-
-	if *targetF == "" {
+	if dest == "" || len(dest) == 0 {
 		p.IsHost = true
+	} else {
+		p.IsHost = false
 
-		<-ctx.Done()
-		return
-	}
-
-	p.IsHost = false
-
-	conn, err := p.startPeerAndConnect(ctx, h, *targetF)
-	if err != nil {
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(err.Error())
+		conn, err := p.startPeerAndConnect(ctx, h, dest)
+		if err != nil {
+			p.emitErr(fmt.Errorf("failed to connect to destination: %v", err))
+			return
 		}
-		return
+		p.trackPeer(conn)
+		go p.readData(conn)
 	}
 
-	p.trackPeer(conn)
-	go p.readData(conn)
-
-	<-ctx.Done()
+	evt := events.NetworkReady{
+		IsHost: p.IsHost,
+		Host:   p.host,
+	}
+	p.emit(evt)
 }
 
-func (p *P2p) makeHost(listenPort int, randSeed int64) (host.Host, error) {
-	var r io.Reader
-	if randSeed == 0 {
-		r = rand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(randSeed))
+func (p *P2p) emit(event events.NetworkEvent) {
+	if p.out == nil {
+		return
 	}
+
+	select {
+	case p.out <- event:
+		// sent
+	default:
+		p.emitErr(fmt.Errorf("network lifecycle channel is full; dropping Event"))
+	}
+}
+
+func (p *P2p) makeHost(port int) (host.Host, error) {
+	r := rand.Reader
 
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
 	if err != nil {
 		return nil, err
 	}
 
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort))
+	if port == 0 {
+		port = defaultPort
+	}
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port))
 
 	opts := []libp2p.Option{
 		libp2p.ListenAddrs(sourceMultiAddr),
@@ -379,26 +332,26 @@ func (p *P2p) startPeer(_ context.Context, h host.Host, streamHandler network.St
 		}
 	}
 
-	if port == "" && p.Handlers.OnLog != nil {
-		p.Handlers.OnLog("was not able to find actual local port")
+	if port == "" {
+		p.emitErr(fmt.Errorf("failed to determine listening port"))
 		return
 	}
 }
 
 func (p *P2p) startPeerAndConnect(_ context.Context, h host.Host, destination string) (*peerConn, error) {
 	for _, la := range h.Addrs() {
-		p.Handlers.OnLog(fmt.Sprintf(" - %v", la))
+		p.emitErr(fmt.Errorf(" - %v", la))
 	}
 
 	maddr, err := ma.NewMultiaddr(destination)
 	if err != nil {
-		p.Handlers.OnLog(err.Error())
+		p.emitErr(fmt.Errorf("invalid destination multiaddress: %v", err))
 		return nil, err
 	}
 
 	info, err := peer.AddrInfoFromP2pAddr(maddr)
 	if err != nil {
-		p.Handlers.OnLog(err.Error())
+		p.emitErr(fmt.Errorf("failed to parse peer address info: %v", err))
 		return nil, err
 	}
 
@@ -406,11 +359,9 @@ func (p *P2p) startPeerAndConnect(_ context.Context, h host.Host, destination st
 
 	s, err := h.NewStream(context.Background(), info.ID, protocolID)
 	if err != nil {
-		p.Handlers.OnLog(err.Error())
+		p.emitErr(fmt.Errorf("failed to create stream to peer: %v", err))
 		return nil, err
 	}
-
-	p.Handlers.OnLog("Established connection to destination")
 
 	conn := &peerConn{
 		id: info.ID,
@@ -418,10 +369,4 @@ func (p *P2p) startPeerAndConnect(_ context.Context, h host.Host, destination st
 	}
 
 	return conn, nil
-}
-
-func (p *P2p) getHostAddress(ha host.Host) string {
-	hostAddr, _ := ma.NewMultiaddr(fmt.Sprintf("/p2p/%s", ha.ID()))
-	addr := ha.Addrs()[0]
-	return addr.Encapsulate(hostAddr).String()
 }
