@@ -44,11 +44,11 @@ func NewP2p() *P2p {
 }
 
 type P2pEventHandlers struct {
-	OnStarted         func(listenAddr string)
-	OnMessageReceived func(from peer.ID, payload []byte)
-	OnSent            func(to peer.ID, payload []byte)
-	OnLog             func(content string)
-	OnPeersUpdated    func(peers []peer.ID)
+	OnStarted      func(playerID peer.ID, listenAddr string)
+	OnCmdReceived  func(from peer.ID, command cmd.Command, payload []byte)
+	OnSent         func(to peer.ID, payload []byte)
+	OnLog          func(content string)
+	OnPeersUpdated func(peers []peer.ID)
 }
 
 const protocolID = "/go-holdem/1.0.0"
@@ -83,7 +83,8 @@ func (p *P2p) SendData(to peer.ID, payload []byte) {
 	}
 }
 
-func (p *P2p) Broadcast(payload []byte) {
+func (p *P2p) Broadcast(cmd cmd.Cmd) {
+	payload, _ := json.Marshal(cmd)
 	p.peers.Range(func(_, value any) bool {
 		conn := value.(*peerConn)
 		if err := writeFrame(conn.rw.Writer, payload); err != nil && p.Handlers.OnLog != nil {
@@ -173,12 +174,12 @@ func addrInfoFromDTO(dto cmd.PeerDTO) (*peer.AddrInfo, error) {
 }
 
 func (p *P2p) announceNewPeer(newPeer peer.AddrInfo) {
-	payload, _ := json.Marshal(cmd.AnnouncementCmd{
+	payload := cmd.AnnouncementCmd{
 		GameCmd: cmd.GameCmd{
 			Command: cmd.Announcement,
 		},
 		Peer: dtoFromAddrInfo(newPeer),
-	})
+	}
 
 	p.Broadcast(payload)
 }
@@ -249,22 +250,10 @@ func (p *P2p) handleMessage(from peer.ID, data []byte) {
 		if err := p.ensurePeerStream(context.Background(), info.ID); err != nil && p.Handlers.OnLog != nil {
 			p.Handlers.OnLog(fmt.Sprintf("open stream to %s failed: %v", message.Peer.ID, err))
 		}
-	case cmd.Tick:
-		var message cmd.TickCmd
-		if err := json.Unmarshal(data, &message); err != nil {
-			if p.Handlers.OnLog != nil {
-				p.Handlers.OnLog(fmt.Sprintf("bad tick cmd from %s: %v", from, err))
-			}
-			return
-		}
 	default:
-		if p.Handlers.OnLog != nil {
-			p.Handlers.OnLog(fmt.Sprintf("unknown command %d from %s", header.Command, from))
+		if p.Handlers.OnCmdReceived != nil {
+			go p.Handlers.OnCmdReceived(from, header.Command, data)
 		}
-	}
-
-	if p.Handlers.OnMessageReceived != nil {
-		go p.Handlers.OnMessageReceived(from, data)
 	}
 }
 
@@ -327,13 +316,13 @@ func (p *P2p) StartHosting() {
 	// Always set the stream handler so both hosts and dialers can accept inbound streams.
 	p.startPeer(ctx, h, p.handleStream)
 
+	if p.Handlers.OnStarted != nil {
+		fullAddr := p.getHostAddress(h)
+		go p.Handlers.OnStarted(p.host.ID(), fullAddr)
+	}
+
 	if *targetF == "" {
 		p.IsHost = true
-
-		if p.Handlers.OnStarted != nil {
-			fullAddr := p.getHostAddress(h)
-			go p.Handlers.OnStarted(fullAddr)
-		}
 
 		<-ctx.Done()
 		return
