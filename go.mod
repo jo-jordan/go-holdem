@@ -6,7 +6,6 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/ipfs/go-log/v2 v2.9.0
 	github.com/libp2p/go-libp2p v0.46.0
 	github.com/muesli/reflow v0.3.0
 	github.com/multiformats/go-multiaddr v0.16.0

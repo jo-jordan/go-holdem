@@ -12,10 +12,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jo-jordan/go-holdem/cmd"
 	"github.com/jo-jordan/go-holdem/entities"
+	"github.com/jo-jordan/go-holdem/events"
 	"github.com/muesli/reflow/wordwrap"
 )
 
 type MainScene struct {
+	out             chan events.SceneEvent
 	program         *tea.Program
 	handlers        MainSceneEventHandlers
 	logs            []string
@@ -38,6 +40,7 @@ type MainSceneEventHandlers struct {
 
 type tickMsg time.Time
 type logMsg struct {
+	isError bool
 	content string
 }
 type playersMsg struct {
@@ -45,13 +48,13 @@ type playersMsg struct {
 }
 
 const sceneWidth = 120
-const playerViewportHeight = 48
-const logViewportHeight = 12
-const chatViewportHeight = 10
-const textareaHeight = 3
+const playerViewportHeight = 20
+const logViewportHeight = 8
+const chatViewportHeight = 8
+const textareaHeight = 1
 const gap = "\n"
 
-func NewMainScene() *MainScene {
+func NewMainScene(out chan events.SceneEvent) *MainScene {
 	logViewport := viewport.New(sceneWidth, logViewportHeight)
 	logViewport.Style = logViewportStyle
 	logViewport.MouseWheelEnabled = true
@@ -67,7 +70,7 @@ func NewMainScene() *MainScene {
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
-	ta.Prompt = "┃ "
+	ta.Prompt = " > "
 	ta.CharLimit = sceneWidth
 	ta.SetWidth(sceneWidth)
 	ta.SetHeight(textareaHeight)
@@ -75,11 +78,12 @@ func NewMainScene() *MainScene {
 	ta.ShowLineNumbers = false
 
 	d := &MainScene{
+		out:             out,
 		logs:            []string{"Start Logging"},
 		ready:           make(chan struct{}),
 		ticks:           0,
 		altscreen:       true,
-		players:         []string{"Player1", "Player2", "Player3"},
+		players:         []string{},
 		logViewport:     logViewport,
 		playersViewport: playerViewport,
 		chatMsgViewport: chatMsgViewport,
@@ -109,7 +113,14 @@ func (d *MainScene) AppendLog(message string) {
 	if d.program == nil {
 		return
 	}
-	d.program.Send(logMsg{content: message})
+	d.program.Send(logMsg{content: message, isError: false})
+}
+
+func (d *MainScene) AppendErrorLog(err error) {
+	if d.program == nil {
+		return
+	}
+	d.program.Send(logMsg{content: err.Error(), isError: true})
 }
 
 func (d *MainScene) UpdatePlayers(players []string) {
@@ -124,7 +135,7 @@ var (
 				Bold(true).
 				Foreground(lipgloss.Color("#FAFAFA")).
 				Background(lipgloss.Color("#000000ff")).
-				Padding(20).
+				Padding(0).
 				BorderStyle(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("228")).
 				BorderBackground(lipgloss.Color("63")).
@@ -141,7 +152,7 @@ var (
 
 func tick() tea.Cmd {
 	return tea.Batch(
-		tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		tea.Tick(time.Millisecond, func(t time.Time) tea.Msg {
 			return tickMsg(t)
 		}),
 		textarea.Blink,
@@ -176,11 +187,11 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.playersViewport, cmd = d.playersViewport.Update(d.players)
 		return d, cmd
 	case logMsg:
-		var cmd tea.Cmd
-		d.logs = d.appendLogs(msg.content)
+		var c tea.Cmd
+		d.logs = d.appendLogs(msg.content, msg.isError)
 
-		d.logViewport, cmd = d.logViewport.Update(d.logs)
-		return d, cmd
+		d.logViewport, c = d.logViewport.Update(d.logs)
+		return d, c
 	case tea.KeyMsg:
 		var (
 			tiCmd tea.Cmd
@@ -190,10 +201,14 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.chatMsgViewport, vpCmd = d.chatMsgViewport.Update(msg)
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
-			fmt.Println(d.textarea.Value())
 			os.Exit(1)
 		case tea.KeyEnter:
 			cm, _ := strings.CutSuffix(d.textarea.Value(), "\n")
+			trimmed := strings.Trim(cm, "\n")
+			if trimmed == "" {
+				d.textarea.Reset()
+				return d, nil
+			}
 			d.chatMessages = append(d.chatMessages, senderStyle("You: ")+cm)
 			d.chatMsgViewport.SetContent(lipgloss.NewStyle().Width(d.chatMsgViewport.Width).Render(strings.Join(d.chatMessages, "\n")))
 			d.textarea.Reset()
@@ -208,7 +223,6 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				d.handlers.OnSendChatMessage(chatCmd)
 			}
-
 		}
 		return d, tea.Batch(tiCmd, vpCmd)
 	}
@@ -216,9 +230,14 @@ func (d *MainScene) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return d, nil
 }
 
-func (d *MainScene) appendLogs(content string) []string {
+func (d *MainScene) appendLogs(content string, isErr bool) []string {
 	timestamp := time.Now().Format("15:04:05")
-	return append(d.logs, fmt.Sprintf("[%s] %s", timestamp, content))
+	log := fmt.Sprintf("[%s] %s", timestamp, content)
+	if isErr {
+		// light red for errors
+		log = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(log)
+	}
+	return append(d.logs, log)
 }
 
 func (d *MainScene) View() string {
