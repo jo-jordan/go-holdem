@@ -5,21 +5,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type LayoutOption struct {
+type ContainerOption struct {
 	Elements []Element
 	Pos      lipgloss.Position
 	IsRoot   bool
 }
 
-type Layout struct {
+type container struct {
 	elements   []Element
 	pos        lipgloss.Position
 	focusIndex int
 	isRoot     bool
 }
 
-func newLayout(opt LayoutOption) *Layout {
-	l := &Layout{
+func newContainer(opt ContainerOption) *container {
+	l := &container{
 		elements:   opt.Elements,
 		pos:        opt.Pos,
 		focusIndex: -1,
@@ -30,7 +30,7 @@ func newLayout(opt LayoutOption) *Layout {
 	return l
 }
 
-func (l *Layout) initCursor() {
+func (l *container) initCursor() {
 	for i, ele := range l.elements {
 		if ele.Focused() {
 			l.focusIndex = i
@@ -38,7 +38,7 @@ func (l *Layout) initCursor() {
 	}
 }
 
-func (l *Layout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (l *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var model tea.Model
 	var cmd tea.Cmd
 
@@ -71,7 +71,7 @@ func (l *Layout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, tea.Batch(cmds...)
 }
 
-func (l *Layout) moveCursor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (l *container) moveCursor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var model tea.Model
 	var cmd tea.Cmd
 	switch msg.Type {
@@ -83,7 +83,7 @@ func (l *Layout) moveCursor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (l *Layout) moveToPrev() (tea.Model, tea.Cmd) {
+func (l *container) moveToPrev() (tea.Model, tea.Cmd) {
 	var model tea.Model
 	var cmd tea.Cmd
 	l.focusIndex--
@@ -96,7 +96,7 @@ func (l *Layout) moveToPrev() (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (l *Layout) moveToNext() (tea.Model, tea.Cmd) {
+func (l *container) moveToNext() (tea.Model, tea.Cmd) {
 	var model tea.Model
 	var cmd tea.Cmd
 	l.focusIndex++
@@ -110,7 +110,7 @@ func (l *Layout) moveToNext() (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (l Layout) view() []string {
+func (l container) view() []string {
 	strs := make([]string, len(l.elements))
 	for i, ele := range l.elements {
 		strs[i] = ele.View()
@@ -118,17 +118,17 @@ func (l Layout) view() []string {
 	return strs
 }
 
-func (l *Layout) focused() bool {
+func (l *container) focused() bool {
 	return l.focusIndex != -1
 }
 
 type Row struct {
-	layout *Layout
+	layout *container
 }
 
-func NewRow(opt LayoutOption) *Row {
+func NewRow(opt ContainerOption) *Row {
 	return &Row{
-		layout: newLayout(opt),
+		layout: newContainer(opt),
 	}
 }
 
@@ -154,12 +154,12 @@ func (r *Row) Focused() bool {
 }
 
 type Column struct {
-	layout *Layout
+	layout *container
 }
 
-func NewColumn(opt LayoutOption) *Column {
+func NewColumn(opt ContainerOption) *Column {
 	return &Column{
-		layout: newLayout(opt),
+		layout: newContainer(opt),
 	}
 }
 

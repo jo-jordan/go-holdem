@@ -14,14 +14,14 @@ type StartScreen struct {
 }
 
 func NewStartSreen() StartScreen {
-	column := ui.NewColumn(ui.LayoutOption{
+	column := ui.NewColumn(ui.ContainerOption{
 		IsRoot: true,
 		Elements: []ui.Element{
 			ui.NewInputText(ui.InputTextOption{
 				Title: "Enter your name: ",
 				Focus: true,
 			}),
-			ui.NewRow(ui.LayoutOption{
+			ui.NewRow(ui.ContainerOption{
 				Elements: []ui.Element{
 					ui.NewButton(ui.ButtonOption{
 						Value: "New Game",
