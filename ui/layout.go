@@ -167,12 +167,7 @@ func (r *Row) Init() tea.Cmd {
 }
 
 func (r *Row) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	model, cmd := r.container.Update(msg)
-	if model == nil {
-		return r, cmd
-	} else {
-		return model, cmd
-	}
+	return r.container.Update(msg)
 }
 
 type Column struct {
@@ -191,10 +186,5 @@ func (c *Column) Init() tea.Cmd {
 }
 
 func (c *Column) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	model, cmd := c.container.Update(msg)
-	if model == nil {
-		return c, cmd
-	} else {
-		return model, cmd
-	}
+	return c.container.Update(msg)
 }
