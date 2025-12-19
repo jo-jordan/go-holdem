@@ -1,6 +1,14 @@
 package events
 
+import "github.com/jo-jordan/go-holdem/cmd"
+
 type SceneEvent interface{ isSceneEvent() }
 
-type SceneReadyToAnnounce struct{}
-type SceneChatMessage struct{ Text string }
+type SceneReady struct{}
+type SceneChatMessage struct {
+	ChatCmd cmd.ChatCmd
+}
+
+// markers
+func (SceneChatMessage) isSceneEvent() {}
+func (SceneReady) isSceneEvent()       {}
