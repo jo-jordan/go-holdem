@@ -8,9 +8,8 @@ import (
 )
 
 type StartScreen struct {
+	screen
 	column ui.Column
-	style  lipgloss.Style
-	err    error
 }
 
 func NewStartSreen() StartScreen {
@@ -23,7 +22,8 @@ func NewStartSreen() StartScreen {
 			ui.NewRow(ui.ContainerOption{
 				Elements: []ui.Element{
 					ui.NewButton(ui.ButtonOption{
-						Value: "New Game",
+						Value:  "New Game",
+						Action: NewGame,
 					}),
 					ui.NewButton(ui.ButtonOption{
 						Value: "Join In",
@@ -36,8 +36,10 @@ func NewStartSreen() StartScreen {
 		Align(lipgloss.Center)
 	return StartScreen{
 		column: *column,
-		style:  style,
-		err:    nil,
+		screen: screen{
+			style: style,
+			err:   nil,
+		},
 	}
 }
 
@@ -46,25 +48,16 @@ func (s StartScreen) Init() tea.Cmd {
 }
 
 func (s StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyEsc:
-			return s, tea.Quit
-		}
-	case tea.WindowSizeMsg:
-		s.style = s.style.
-			Width(msg.Width).
-			Height(msg.Height).
-			AlignVertical(lipgloss.Center).
-			AlignHorizontal(lipgloss.Center)
-	case error:
-		s.err = msg
-		return s, nil
+	var model tea.Model
+	cmd := s.screen.Update(msg)
+	if cmd != nil {
+		return s, cmd
 	}
-	var cmd tea.Cmd
-	_, cmd = s.column.Update(msg)
-	return s, cmd
+	model, cmd = s.column.Update(msg)
+	if model == nil {
+		model = s
+	}
+	return model, cmd
 }
 
 func (s StartScreen) View() string {
