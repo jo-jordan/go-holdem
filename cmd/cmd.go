@@ -1,7 +1,9 @@
 package cmd
 
+type Command uint8
+
 const (
-	Announcement uint8 = iota + 0
+	Announcement Command = iota + 0
 	Tick
 	StartGame
 	Deal
@@ -10,10 +12,14 @@ const (
 	Raise
 	Fold
 	EndGame
+	Chat
 )
 
+type Cmd interface{}
+
 type GameCmd struct {
-	Command uint8 `json:"command"`
+	Cmd
+	Command Command `json:"command"`
 }
 type AnnouncementCmd struct {
 	GameCmd
@@ -28,4 +34,10 @@ type PeerDTO struct {
 type TickCmd struct {
 	GameCmd
 	Tick string `json:"tick"`
+}
+
+type ChatCmd struct {
+	GameCmd
+	SenderID string `json:"sender_id"`
+	Content  string `json:"content"`
 }
