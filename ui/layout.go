@@ -8,14 +8,14 @@ import (
 type ContainerOption struct {
 	Elements []Element
 	Pos      lipgloss.Position
-	IsRoot   bool
 }
 
 type container struct {
 	elements   []Element
 	pos        lipgloss.Position
 	focusIndex int
-	isRoot     bool
+	target     Element
+	viewFormat func(lipgloss.Position, ...string) string
 }
 
 func newContainer(opt ContainerOption) *container {
@@ -23,113 +23,143 @@ func newContainer(opt ContainerOption) *container {
 		elements:   opt.Elements,
 		pos:        opt.Pos,
 		focusIndex: -1,
-		isRoot:     opt.IsRoot,
 	}
 
 	l.initCursor()
 	return l
 }
 
-func (l *container) initCursor() {
-	for i, ele := range l.elements {
+func (c *container) initCursor() {
+	for i, ele := range c.elements {
 		if ele.Focused() {
-			l.focusIndex = i
+			c.focusIndex = i
+		}
+		ele.SetTarget(c)
+	}
+}
+
+func (c *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var model tea.Model
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case moveToPrevMsg, moveToNextMsg:
+		cmd = c.moveCursor(msg)
+	default:
+		if c.Focused() {
+			model, cmd = c.elements[c.focusIndex].Update(msg)
 		}
 	}
-}
 
-func (l *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var model tea.Model
-	var cmd tea.Cmd
-
-	// Handle move to next/prev into
-	switch msg.(type) {
-	case moveToNextMsg:
-		l.focusIndex = 0
-	case moveToPrevMsg:
-		l.focusIndex = len(l.elements) - 1
-	}
-
-	if !l.focused() {
-		return nil, cmd
-	}
-
-	// Update focused element
-	current := l.elements[l.focusIndex]
-	model, cmd = current.Update(msg)
-
-	if current.Focused() {
-		return model, cmd
-	}
-
-	cmds := []tea.Cmd{cmd}
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		model, cmd = l.moveCursor(msg)
-		cmds = append(cmds, cmd)
-	}
-	return model, tea.Batch(cmds...)
-}
-
-func (l *container) moveCursor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	var model tea.Model
-	var cmd tea.Cmd
-	switch msg.Type {
-	case tea.KeyTab:
-		model, cmd = l.moveToNext()
-	case tea.KeyShiftTab:
-		model, cmd = l.moveToPrev()
-	}
 	return model, cmd
 }
 
-func (l *container) moveToPrev() (tea.Model, tea.Cmd) {
-	var model tea.Model
-	var cmd tea.Cmd
-	l.focusIndex--
-	if l.focusIndex == -1 && !l.isRoot {
-		return model, cmd
-	} else if l.focusIndex == -1 && l.isRoot {
-		l.focusIndex = len(l.elements) - 1
+func (c *container) View() string {
+	if c.viewFormat == nil {
+		return ""
 	}
-	model, cmd = l.elements[l.focusIndex].Update(moveToPrevMsg{})
-	return model, cmd
-}
-
-func (l *container) moveToNext() (tea.Model, tea.Cmd) {
-	var model tea.Model
-	var cmd tea.Cmd
-	l.focusIndex++
-	if l.focusIndex == len(l.elements) && !l.isRoot {
-		l.focusIndex = -1
-		return model, cmd
-	} else if l.focusIndex == len(l.elements) && l.isRoot {
-		l.focusIndex = 0
-	}
-	model, cmd = l.elements[l.focusIndex].Update(moveToNextMsg{})
-	return model, cmd
-}
-
-func (l container) view() []string {
-	strs := make([]string, len(l.elements))
-	for i, ele := range l.elements {
+	strs := make([]string, len(c.elements))
+	for i, ele := range c.elements {
 		strs[i] = ele.View()
 	}
-	return strs
+	return c.viewFormat(c.pos, strs...)
 }
 
-func (l *container) focused() bool {
-	return l.focusIndex != -1
+func (c *container) Focused() bool {
+	return c.focusIndex != -1
+}
+
+func (c *container) SetTarget(t Element) {
+	c.target = t
+}
+
+func (c *container) moveCursor(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case moveToNextMsg:
+		cmd = c.moveToNext(msg.target)
+	case moveToPrevMsg:
+		cmd = c.moveToPrev(msg.target)
+	}
+
+	return cmd
+}
+
+func (c *container) moveToNext(target Element) tea.Cmd {
+	var cmd tea.Cmd
+
+	t := target
+	switch target := target.(type) {
+	case *Row:
+		t = target.container
+	case *Column:
+		t = target.container
+	}
+
+	if t == c {
+		c.focusIndex++
+		if c.focusIndex == len(c.elements) {
+			c.focusIndex = -1
+			return func() tea.Msg {
+				return moveToNextMsg{target: c.target}
+			}
+		}
+
+		target = c.elements[c.focusIndex]
+	} else {
+		if t == nil {
+			c.focusIndex = 0
+			target = c.elements[c.focusIndex]
+		} else {
+			target = t
+		}
+	}
+	_, cmd = c.elements[c.focusIndex].Update(moveToNextMsg{target: target})
+	return cmd
+}
+
+func (c *container) moveToPrev(target Element) tea.Cmd {
+	var cmd tea.Cmd
+
+	t := target
+	switch target := target.(type) {
+	case *Row:
+		t = target.container
+	case *Column:
+		t = target.container
+	}
+
+	if t == c {
+		c.focusIndex--
+		if c.focusIndex == -1 {
+			return func() tea.Msg {
+				return moveToPrevMsg{target: c.target}
+			}
+		} else if c.focusIndex < -1 {
+			c.focusIndex = len(c.elements) - 1
+		}
+
+		target = c.elements[c.focusIndex]
+	} else {
+		if t == nil {
+			c.focusIndex = len(c.elements) - 1
+			target = c.elements[c.focusIndex]
+		} else {
+			target = t
+		}
+	}
+	_, cmd = c.elements[c.focusIndex].Update(moveToPrevMsg{target: target})
+	return cmd
 }
 
 type Row struct {
-	layout *container
+	*container
 }
 
 func NewRow(opt ContainerOption) *Row {
-	return &Row{
-		layout: newContainer(opt),
-	}
+	r := new(Row)
+	r.container = newContainer(opt)
+	r.container.viewFormat = lipgloss.JoinHorizontal
+	return r
 }
 
 func (r *Row) Init() tea.Cmd {
@@ -137,7 +167,7 @@ func (r *Row) Init() tea.Cmd {
 }
 
 func (r *Row) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	model, cmd := r.layout.Update(msg)
+	model, cmd := r.container.Update(msg)
 	if model == nil {
 		return r, cmd
 	} else {
@@ -145,22 +175,15 @@ func (r *Row) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (r *Row) View() string {
-	return lipgloss.JoinHorizontal(r.layout.pos, r.layout.view()...)
-}
-
-func (r *Row) Focused() bool {
-	return r.layout.focused()
-}
-
 type Column struct {
-	layout *container
+	*container
 }
 
 func NewColumn(opt ContainerOption) *Column {
-	return &Column{
-		layout: newContainer(opt),
-	}
+	c := new(Column)
+	c.container = newContainer(opt)
+	c.container.viewFormat = lipgloss.JoinVertical
+	return c
 }
 
 func (c *Column) Init() tea.Cmd {
@@ -168,18 +191,10 @@ func (c *Column) Init() tea.Cmd {
 }
 
 func (c *Column) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	model, cmd := c.layout.Update(msg)
+	model, cmd := c.container.Update(msg)
 	if model == nil {
 		return c, cmd
 	} else {
 		return model, cmd
 	}
-}
-
-func (c *Column) View() string {
-	return lipgloss.JoinVertical(c.layout.pos, c.layout.view()...)
-}
-
-func (c *Column) Focused() bool {
-	return c.layout.focused()
 }
