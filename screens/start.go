@@ -15,7 +15,6 @@ type StartScreen struct {
 
 func NewStartSreen() StartScreen {
 	column := ui.NewColumn(ui.ContainerOption{
-		IsRoot: true,
 		Elements: []ui.Element{
 			ui.NewInputText(ui.InputTextOption{
 				Title: "Enter your name: ",

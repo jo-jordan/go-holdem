@@ -15,6 +15,7 @@ type Button struct {
 	value  string
 	focus  bool
 	style  lipgloss.Style
+	target Element
 	action ButtonAction
 }
 
@@ -55,8 +56,20 @@ func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		b.focus = true
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyTab, tea.KeyShiftTab:
+		case tea.KeyShiftTab:
 			b.focus = false
+			cmd = func() tea.Msg {
+				return moveToPrevMsg{
+					target: b.target,
+				}
+			}
+		case tea.KeyTab:
+			b.focus = false
+			cmd = func() tea.Msg {
+				return moveToNextMsg{
+					target: b.target,
+				}
+			}
 		case tea.KeyEnter:
 			model = b.action()
 		}
@@ -76,4 +89,8 @@ func (b Button) View() string {
 
 func (b *Button) Focused() bool {
 	return b.focus
+}
+
+func (b *Button) SetTarget(t Element) {
+	b.target = t
 }

@@ -9,8 +9,9 @@ import (
 )
 
 type InputText struct {
-	text  textinput.Model
-	style lipgloss.Style
+	text   textinput.Model
+	style  lipgloss.Style
+	target Element
 }
 
 type InputTextOption struct {
@@ -62,10 +63,14 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyShiftTab, tea.KeyTab:
+		case tea.KeyShiftTab:
 			i.text.Blur()
+			cmds = append(cmds, i.moveToPrevCmd)
+		case tea.KeyTab, tea.KeyEnter:
+			i.text.Blur()
+			cmds = append(cmds, i.moveToNextCmd)
 		}
-	case moveToNextMsg, moveToPrevMsg:
+	case moveToPrevMsg, moveToNextMsg:
 		cmd = i.text.Focus()
 		cmds = append(cmds, cmd)
 	}
@@ -79,4 +84,20 @@ func (i *InputText) View() string {
 
 func (i *InputText) Focused() bool {
 	return i.text.Focused()
+}
+
+func (i *InputText) SetTarget(t Element) {
+	i.target = t
+}
+
+func (i *InputText) moveToNextCmd() tea.Msg {
+	return moveToNextMsg{
+		target: i.target,
+	}
+}
+
+func (i *InputText) moveToPrevCmd() tea.Msg {
+	return moveToPrevMsg{
+		target: i.target,
+	}
 }
