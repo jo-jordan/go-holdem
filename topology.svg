@@ -1,0 +1,61 @@
+<svg viewBox="0 0 300 300" width="100%" height="320" xmlns="http://www.w3.org/2000/svg" style="max-width:440px;">
+    <style>
+        .mesh-line { stroke: #94a3b8; stroke-width: 1.3; opacity: 0.65; }
+        .mesh-node { fill: #1d4ed8; stroke: #e2e8f0; stroke-width: 2; }
+        .mesh-label { font: 14px/1.2 "Segoe UI", sans-serif; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <!-- Edge set for K7 (P1..P7) -->
+    <g class="mesh-line">
+        <!-- center connections -->
+        <line x1="150" y1="150" x2="150" y2="50"/>
+        <line x1="150" y1="150" x2="236" y2="100"/>
+        <line x1="150" y1="150" x2="236" y2="200"/>
+        <line x1="150" y1="150" x2="150" y2="250"/>
+        <line x1="150" y1="150" x2="64" y2="200"/>
+        <line x1="150" y1="150" x2="64" y2="100"/>
+        <!-- outer ring complete connections -->
+        <line x1="150" y1="50"  x2="236" y2="100"/>
+        <line x1="150" y1="50"  x2="236" y2="200"/>
+        <line x1="150" y1="50"  x2="150" y2="250"/>
+        <line x1="150" y1="50"  x2="64"  y2="200"/>
+        <line x1="150" y1="50"  x2="64"  y2="100"/>
+
+        <line x1="236" y1="100" x2="236" y2="200"/>
+        <line x1="236" y1="100" x2="150" y2="250"/>
+        <line x1="236" y1="100" x2="64"  y2="200"/>
+        <line x1="236" y1="100" x2="64"  y2="100"/>
+
+        <line x1="236" y1="200" x2="150" y2="250"/>
+        <line x1="236" y1="200" x2="64"  y2="200"/>
+        <line x1="236" y1="200" x2="64"  y2="100"/>
+
+        <line x1="150" y1="250" x2="64"  y2="200"/>
+        <line x1="150" y1="250" x2="64"  y2="100"/>
+
+        <line x1="64"  y1="200" x2="64"  y2="100"/>
+    </g>
+
+    <!-- Nodes -->
+    <g>
+        <circle class="mesh-node" cx="150" cy="150" r="22"/>
+        <text class="mesh-label" x="150" y="150">P1</text>
+
+        <circle class="mesh-node" cx="150" cy="50"  r="18"/>
+        <text class="mesh-label" x="150" y="50">P2</text>
+
+        <circle class="mesh-node" cx="236" cy="100" r="18"/>
+        <text class="mesh-label" x="236" y="100">P3</text>
+
+        <circle class="mesh-node" cx="236" cy="200" r="18"/>
+        <text class="mesh-label" x="236" y="200">P4</text>
+
+        <circle class="mesh-node" cx="150" cy="250" r="18"/>
+        <text class="mesh-label" x="150" y="250">P5</text>
+
+        <circle class="mesh-node" cx="64"  cy="200" r="18"/>
+        <text class="mesh-label" x="64"  y="200">P6</text>
+
+        <circle class="mesh-node" cx="64"  cy="100" r="18"/>
+        <text class="mesh-label" x="64"  y="100">P7</text>
+    </g>
+</svg>
