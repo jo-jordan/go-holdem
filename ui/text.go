@@ -9,9 +9,9 @@ import (
 )
 
 type InputText struct {
-	text   textinput.Model
-	style  lipgloss.Style
-	target Element
+	text    textinput.Model
+	style   lipgloss.Style
+	actions []*ActionMap
 }
 
 type InputTextOption struct {
@@ -21,6 +21,7 @@ type InputTextOption struct {
 	PlaceHolder string
 	Style       *lipgloss.Style
 	Focus       bool
+	Actions     []*ActionMap
 }
 
 func NewInputText(opt InputTextOption) *InputText {
@@ -48,8 +49,9 @@ func NewInputText(opt InputTextOption) *InputText {
 	}
 
 	return &InputText{
-		text:  text,
-		style: style,
+		text:    text,
+		style:   style,
+		actions: opt.Actions,
 	}
 }
 
@@ -60,44 +62,31 @@ func (i *InputText) Init() tea.Cmd {
 func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
+	var model tea.Model
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyShiftTab:
-			i.text.Blur()
-			cmds = append(cmds, i.moveToPrevCmd)
-		case tea.KeyTab, tea.KeyEnter:
-			i.text.Blur()
-			cmds = append(cmds, i.moveToNextCmd)
-		}
-	case moveToPrevMsg, moveToNextMsg:
+	case focusMsg:
 		cmd = i.text.Focus()
 		cmds = append(cmds, cmd)
+	case blurMsg:
+		i.text.Blur()
+	case tea.KeyMsg:
+		for _, m := range i.actions {
+			if msg.Type == m.Msg {
+				model, cmd = m.Act()
+				cmds = append(cmds, cmd)
+				break
+			}
+		}
 	}
 	i.text, cmd = i.text.Update(msg)
-	return nil, tea.Batch(append(cmds, cmd)...)
+	cmds = append(cmds, cmd)
+	return model, tea.Batch(cmds...)
 }
 
 func (i *InputText) View() string {
 	return i.style.Render(fmt.Sprintf("%s\n", i.text.View()))
 }
 
-func (i *InputText) Focused() bool {
-	return i.text.Focused()
-}
-
-func (i *InputText) SetTarget(t Element) {
-	i.target = t
-}
-
-func (i *InputText) moveToNextCmd() tea.Msg {
-	return moveToNextMsg{
-		target: i.target,
-	}
-}
-
-func (i *InputText) moveToPrevCmd() tea.Msg {
-	return moveToPrevMsg{
-		target: i.target,
-	}
+func (i *InputText) Value() string {
+	return i.text.Value()
 }

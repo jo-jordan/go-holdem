@@ -9,57 +9,102 @@ import (
 
 type StartScreen struct {
 	screen
-	column ui.Column
+	ui.CursorMove
+
+	name         *ui.InputText
+	createButton *ui.Button
+	joinButton   *ui.Button
 }
 
-func NewStartSreen() StartScreen {
-	column := ui.NewColumn(ui.ContainerOption{
-		Elements: []ui.Element{
-			ui.NewInputText(ui.InputTextOption{
-				Title: "Enter your name: ",
-				Focus: true,
-			}),
-			ui.NewRow(ui.ContainerOption{
-				Elements: []ui.Element{
-					ui.NewButton(ui.ButtonOption{
-						Value:  "New Game",
-						Action: NewGame,
-					}),
-					ui.NewButton(ui.ButtonOption{
-						Value: "Join In",
-					}),
+func NewStartSreen() *StartScreen {
+	start := &StartScreen{
+		name: ui.NewInputText(ui.InputTextOption{
+			Title: "Input your name: ",
+			Focus: true,
+			Actions: []*ui.ActionMap{
+				tabToNext,
+				enterToNext,
+				shiftTabToPrev,
+			},
+		}),
+	}
+	start.createButton = ui.NewButton(ui.ButtonOption{
+		Value: "Create Game",
+		Actions: []*ui.ActionMap{
+			tabToNext,
+			shiftTabToPrev,
+			{
+				Msg: tea.KeyEnter,
+				Act: func() (tea.Model, tea.Cmd) {
+					name := start.name.Value()
+					if name == "" {
+						return nil, nil
+					}
+					return NewGame(GameOption{Name: name, Style: start.style}), nil
 				},
-			}),
+			},
 		},
 	})
-	style := lipgloss.NewStyle().
-		Align(lipgloss.Center)
-	return StartScreen{
-		column: *column,
-		screen: screen{
-			style: style,
-			err:   nil,
+	start.joinButton = ui.NewButton(ui.ButtonOption{
+		Value: "Join in",
+		Actions: []*ui.ActionMap{
+			tabToNext,
+			shiftTabToPrev,
+			{
+				Msg: tea.KeyEnter,
+				Act: func() (tea.Model, tea.Cmd) {
+					name := start.name.Value()
+					if name == "" {
+						return nil, nil
+					}
+					return NewJoinGame(JoinGameOption{Name: name, Style: start.style}), nil
+				},
+			},
 		},
-	}
+	})
+	start.CursorMove = ui.NewCursorMove([]tea.Model{
+		start.name,
+		start.createButton,
+		start.joinButton,
+	})
+	return start
 }
 
-func (s StartScreen) Init() tea.Cmd {
+func (s *StartScreen) WithStyle(style *lipgloss.Style) *StartScreen {
+	if style != nil {
+		s.style = *style
+	}
+	return s
+}
+
+func (s *StartScreen) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (s StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var model tea.Model
 	cmd := s.screen.Update(msg)
 	if cmd != nil {
 		return s, cmd
 	}
-	model, cmd = s.column.Update(msg)
+
+	model, cmd = s.CursorMove.Update(msg)
 	if model == nil {
 		model = s
 	}
 	return model, cmd
 }
 
-func (s StartScreen) View() string {
-	return s.style.Render(s.column.View())
+func (s *StartScreen) View() string {
+	return s.style.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			s.name.View(),
+			lipgloss.JoinHorizontal(
+				lipgloss.Center,
+				s.createButton.View(),
+				s.joinButton.View(),
+			),
+		),
+	)
 }
