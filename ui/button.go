@@ -5,25 +5,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type ButtonAction func() tea.Model
-
-func defaultButtonAction() tea.Model {
-	return nil
-}
-
 type Button struct {
-	value  string
-	focus  bool
-	style  lipgloss.Style
-	target Element
-	action ButtonAction
+	value   string
+	focus   bool
+	style   lipgloss.Style
+	actions []*ActionMap
 }
 
 type ButtonOption struct {
-	Value  string
-	Focus  bool
-	Style  *lipgloss.Style
-	Action ButtonAction
+	Value   string
+	Focus   bool
+	Style   *lipgloss.Style
+	Actions []*ActionMap
 }
 
 func NewButton(opt ButtonOption) *Button {
@@ -36,11 +29,7 @@ func NewButton(opt ButtonOption) *Button {
 	} else {
 		b.style = *opt.Style
 	}
-	if opt.Action == nil {
-		b.action = defaultButtonAction
-	} else {
-		b.action = opt.Action
-	}
+	b.actions = opt.Actions
 	return b
 }
 
@@ -49,29 +38,19 @@ func (b *Button) Init() tea.Cmd {
 }
 
 func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var model tea.Model
 	var cmd tea.Cmd
+	var model tea.Model
 	switch msg := msg.(type) {
-	case moveToPrevMsg, moveToNextMsg:
+	case focusMsg:
 		b.focus = true
+	case blurMsg:
+		b.focus = false
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyShiftTab:
-			b.focus = false
-			cmd = func() tea.Msg {
-				return moveToPrevMsg{
-					target: b.target,
-				}
+		for _, m := range b.actions {
+			if msg.Type == m.Msg {
+				model, cmd = m.Act()
+				break
 			}
-		case tea.KeyTab:
-			b.focus = false
-			cmd = func() tea.Msg {
-				return moveToNextMsg{
-					target: b.target,
-				}
-			}
-		case tea.KeyEnter:
-			model = b.action()
 		}
 	}
 	return model, cmd
@@ -85,12 +64,4 @@ func (b Button) View() string {
 			Foreground(lipgloss.Color("#FFFFFF"))
 	}
 	return style.Render(b.value)
-}
-
-func (b *Button) Focused() bool {
-	return b.focus
-}
-
-func (b *Button) SetTarget(t Element) {
-	b.target = t
 }
