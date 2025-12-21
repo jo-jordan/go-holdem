@@ -1,11 +1,9 @@
 package ui
 
 import (
-	"fmt"
-
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type InputText struct {
@@ -30,10 +28,10 @@ func NewInputText(opt InputTextOption) *InputText {
 	text.SetValue(opt.InitText)
 	text.Placeholder = opt.PlaceHolder
 	if opt.TextWidth != 0 {
-		text.Width = opt.TextWidth
+		text.SetWidth(opt.TextWidth)
 		text.CharLimit = opt.TextWidth
 	} else {
-		text.Width = 24
+		text.SetWidth(24)
 		text.CharLimit = 24
 	}
 
@@ -69,9 +67,9 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case blurMsg:
 		i.text.Blur()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		for _, m := range i.actions {
-			if msg.Type == m.Msg {
+			if msg.String() == m.Msg {
 				model, cmd = m.Act()
 				cmds = append(cmds, cmd)
 				break
@@ -84,7 +82,7 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (i *InputText) View() string {
-	return i.style.Render(fmt.Sprintf("%s\n", i.text.View()))
+	return i.style.Render(i.text.View())
 }
 
 func (i *InputText) Value() string {

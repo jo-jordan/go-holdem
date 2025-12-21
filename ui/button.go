@@ -1,8 +1,8 @@
 package ui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type Button struct {
@@ -45,9 +45,9 @@ func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		b.focus = true
 	case blurMsg:
 		b.focus = false
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		for _, m := range b.actions {
-			if msg.Type == m.Msg {
+			if msg.String() == m.Msg {
 				model, cmd = m.Act()
 				break
 			}

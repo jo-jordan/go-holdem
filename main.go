@@ -3,12 +3,12 @@ package main
 import (
 	"log"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/jo-jordan/go-holdem/screens"
 )
 
 func main() {
-	p := tea.NewProgram(screens.NewStartSreen(), tea.WithAltScreen())
+	p := tea.NewProgram(screens.NewStartSreen())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

@@ -1,8 +1,8 @@
 package screens
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/jo-jordan/go-holdem/ui"
 )
 
@@ -14,9 +14,9 @@ type screen struct {
 func (s *screen) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyEsc:
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "esc":
 			cmd = tea.Quit
 		}
 	case tea.WindowSizeMsg:
@@ -33,15 +33,15 @@ func (s *screen) Update(msg tea.Msg) tea.Cmd {
 
 var (
 	tabToNext = &ui.ActionMap{
-		Msg: tea.KeyTab,
+		Msg: "tab",
 		Act: ui.MoveToNext,
 	}
 	enterToNext = &ui.ActionMap{
-		Msg: tea.KeyEnter,
+		Msg: "enter",
 		Act: ui.MoveToNext,
 	}
 	shiftTabToPrev = &ui.ActionMap{
-		Msg: tea.KeyShiftTab,
+		Msg: "shift+tab",
 		Act: ui.MoveToPrev,
 	}
 )
