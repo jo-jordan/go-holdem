@@ -1,9 +1,9 @@
 package screens
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/jo-jordan/go-holdem/ui"
 )
 
@@ -34,7 +34,7 @@ func NewStartSreen() *StartScreen {
 			tabToNext,
 			shiftTabToPrev,
 			{
-				Msg: tea.KeyEnter,
+				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
 					name := start.name.Value()
 					if name == "" {
@@ -51,7 +51,7 @@ func NewStartSreen() *StartScreen {
 			tabToNext,
 			shiftTabToPrev,
 			{
-				Msg: tea.KeyEnter,
+				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
 					name := start.name.Value()
 					if name == "" {
@@ -62,7 +62,7 @@ func NewStartSreen() *StartScreen {
 			},
 		},
 	})
-	start.CursorMove = ui.NewCursorMove([]tea.Model{
+	start.CursorMove = ui.NewCursorMove([]ui.Elementer{
 		start.name,
 		start.createButton,
 		start.joinButton,
@@ -95,8 +95,8 @@ func (s *StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (s *StartScreen) View() string {
-	return s.style.Render(
+func (s *StartScreen) View() tea.View {
+	return tea.NewView(s.style.Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
 			s.name.View(),
@@ -106,5 +106,5 @@ func (s *StartScreen) View() string {
 				s.joinButton.View(),
 			),
 		),
-	)
+	))
 }

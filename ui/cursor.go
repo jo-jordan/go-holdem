@@ -1,7 +1,7 @@
 package ui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type MoveToPrevMsg struct{}
@@ -14,10 +14,10 @@ type blurMsg struct{}
 
 type CursorMove struct {
 	index  int
-	models []tea.Model
+	models []Elementer
 }
 
-func NewCursorMove(models []tea.Model) CursorMove {
+func NewCursorMove(models []Elementer) CursorMove {
 	return CursorMove{
 		models: models,
 	}
@@ -59,6 +59,6 @@ func MoveToPrev() (tea.Model, tea.Cmd) {
 }
 
 type ActionMap struct {
-	Msg tea.Msg
+	Msg string
 	Act func() (tea.Model, tea.Cmd)
 }

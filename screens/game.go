@@ -3,9 +3,9 @@ package screens
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/jo-jordan/go-holdem/ui"
 )
 
@@ -40,8 +40,8 @@ func (g *Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return g, cmd
 }
 
-func (g *Game) View() string {
-	return fmt.Sprintf("%s is creating a new game\n", g.name)
+func (g *Game) View() tea.View {
+	return tea.NewView(fmt.Sprintf("%s is creating a new game\n", g.name))
 }
 
 type JoinGame struct {
@@ -78,7 +78,7 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			tabToNext,
 			shiftTabToPrev,
 			{
-				Msg: tea.KeyEnter,
+				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
 					target := game.target.Value()
 					if target == "" {
@@ -95,14 +95,14 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			tabToNext,
 			shiftTabToPrev,
 			{
-				Msg: tea.KeyEnter,
+				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
 					return NewStartSreen().WithStyle(&game.style), nil
 				},
 			},
 		},
 	})
-	game.CursorMove = ui.NewCursorMove([]tea.Model{
+	game.CursorMove = ui.NewCursorMove([]ui.Elementer{
 		game.target,
 		game.joinButton,
 		game.cancelButton,
@@ -129,8 +129,8 @@ func (g *JoinGame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func (g *JoinGame) View() string {
-	return g.style.Render(
+func (g *JoinGame) View() tea.View {
+	v := tea.NewView(g.style.Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
 			fmt.Sprintf("User: %s", g.name),
@@ -141,6 +141,8 @@ func (g *JoinGame) View() string {
 				g.cancelButton.View(),
 			),
 		),
-	)
+	))
+	v.AltScreen = true
+	return v
 
 }
