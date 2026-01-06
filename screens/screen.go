@@ -3,7 +3,6 @@ package screens
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/jo-jordan/go-holdem/ui"
 )
 
 type screen struct {
@@ -30,18 +29,3 @@ func (s *screen) Update(msg tea.Msg) tea.Cmd {
 	}
 	return cmd
 }
-
-var (
-	tabToNext = &ui.ActionMap{
-		Msg: "tab",
-		Act: ui.MoveToNext,
-	}
-	enterToNext = &ui.ActionMap{
-		Msg: "enter",
-		Act: ui.MoveToNext,
-	}
-	shiftTabToPrev = &ui.ActionMap{
-		Msg: "shift+tab",
-		Act: ui.MoveToPrev,
-	}
-)

@@ -17,9 +17,15 @@ type CursorMove struct {
 	models []Elementer
 }
 
-func NewCursorMove(models []Elementer) CursorMove {
+type CursorMoveOption struct {
+	Index  int
+	Models []Elementer
+}
+
+func NewCursorMove(opt CursorMoveOption) CursorMove {
 	return CursorMove{
-		models: models,
+		index:  opt.Index,
+		models: opt.Models,
 	}
 }
 
@@ -58,7 +64,28 @@ func MoveToPrev() (tea.Model, tea.Cmd) {
 	}
 }
 
+type IngoreQuitMsg struct{}
+
+func IgnoreQuitCmd() tea.Msg {
+	return IngoreQuitMsg{}
+}
+
 type ActionMap struct {
 	Msg string
 	Act func() (tea.Model, tea.Cmd)
 }
+
+var (
+	TabToNext = &ActionMap{
+		Msg: "tab",
+		Act: MoveToNext,
+	}
+	EnterToNext = &ActionMap{
+		Msg: "enter",
+		Act: MoveToNext,
+	}
+	ShiftTabToPrev = &ActionMap{
+		Msg: "shift+tab",
+		Act: MoveToPrev,
+	}
+)

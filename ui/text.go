@@ -30,9 +30,6 @@ func NewInputText(opt InputTextOption) *InputText {
 	if opt.TextWidth != 0 {
 		text.SetWidth(opt.TextWidth)
 		text.CharLimit = opt.TextWidth
-	} else {
-		text.SetWidth(24)
-		text.CharLimit = 24
 	}
 
 	var style lipgloss.Style
@@ -81,10 +78,14 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, tea.Batch(cmds...)
 }
 
-func (i *InputText) View() string {
-	return i.style.Render(i.text.View())
+func (i InputText) View() string {
+	style := i.style
+	if i.text.Focused() {
+		style = style.BorderForeground(lipgloss.Color("#FF5FAF"))
+	}
+	return style.Render(i.text.View())
 }
 
-func (i *InputText) Value() string {
+func (i InputText) Value() string {
 	return i.text.Value()
 }
