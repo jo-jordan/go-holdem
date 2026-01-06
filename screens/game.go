@@ -11,7 +11,11 @@ import (
 
 type Game struct {
 	screen
+	ui.CursorMove
+
 	name string
+
+	msgBox *ui.Message
 }
 
 type GameOption struct {
@@ -24,24 +28,37 @@ func NewGame(opt GameOption) *Game {
 		name: opt.Name,
 	}
 	game.style = opt.Style
+	game.msgBox = ui.NewMessage(opt.Style)
+
+	game.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
+		Models: []ui.Elementer{
+			game.msgBox,
+		},
+	})
 
 	return game
 }
 
 func (g *Game) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (g *Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmd := g.screen.Update(msg)
+	var cmd tea.Cmd
+	cmd = g.screen.Update(msg)
+
 	if cmd != nil {
 		return g, cmd
 	}
+
+	_, cmd = g.msgBox.Update(msg)
 	return g, cmd
 }
 
 func (g *Game) View() tea.View {
-	return tea.NewView(fmt.Sprintf("%s is creating a new game\n", g.name))
+	v := tea.NewView(g.msgBox.View())
+	v.AltScreen = true
+	return v
 }
 
 type JoinGame struct {
@@ -65,9 +82,9 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			Title: "Target: ",
 			Focus: true,
 			Actions: []*ui.ActionMap{
-				tabToNext,
-				enterToNext,
-				shiftTabToPrev,
+				ui.TabToNext,
+				ui.EnterToNext,
+				ui.ShiftTabToPrev,
 			},
 		}),
 	}
@@ -75,8 +92,8 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 	game.joinButton = ui.NewButton(ui.ButtonOption{
 		Value: "Join",
 		Actions: []*ui.ActionMap{
-			tabToNext,
-			shiftTabToPrev,
+			ui.TabToNext,
+			ui.ShiftTabToPrev,
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
@@ -92,8 +109,8 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 	game.cancelButton = ui.NewButton(ui.ButtonOption{
 		Value: "Cancel",
 		Actions: []*ui.ActionMap{
-			tabToNext,
-			shiftTabToPrev,
+			ui.TabToNext,
+			ui.ShiftTabToPrev,
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
@@ -102,10 +119,12 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			},
 		},
 	})
-	game.CursorMove = ui.NewCursorMove([]ui.Elementer{
-		game.target,
-		game.joinButton,
-		game.cancelButton,
+	game.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
+		Models: []ui.Elementer{
+			game.target,
+			game.joinButton,
+			game.cancelButton,
+		},
 	})
 	game.style = opt.Style
 	return &game
@@ -144,5 +163,4 @@ func (g *JoinGame) View() tea.View {
 	))
 	v.AltScreen = true
 	return v
-
 }

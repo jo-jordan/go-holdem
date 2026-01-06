@@ -22,17 +22,17 @@ func NewStartSreen() *StartScreen {
 			Title: "Input your name: ",
 			Focus: true,
 			Actions: []*ui.ActionMap{
-				tabToNext,
-				enterToNext,
-				shiftTabToPrev,
+				ui.TabToNext,
+				ui.EnterToNext,
+				ui.ShiftTabToPrev,
 			},
 		}),
 	}
 	start.createButton = ui.NewButton(ui.ButtonOption{
 		Value: "Create Game",
 		Actions: []*ui.ActionMap{
-			tabToNext,
-			shiftTabToPrev,
+			ui.TabToNext,
+			ui.ShiftTabToPrev,
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
@@ -48,8 +48,8 @@ func NewStartSreen() *StartScreen {
 	start.joinButton = ui.NewButton(ui.ButtonOption{
 		Value: "Join in",
 		Actions: []*ui.ActionMap{
-			tabToNext,
-			shiftTabToPrev,
+			ui.TabToNext,
+			ui.ShiftTabToPrev,
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
@@ -62,10 +62,12 @@ func NewStartSreen() *StartScreen {
 			},
 		},
 	})
-	start.CursorMove = ui.NewCursorMove([]ui.Elementer{
-		start.name,
-		start.createButton,
-		start.joinButton,
+	start.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
+		Models: []ui.Elementer{
+			start.name,
+			start.createButton,
+			start.joinButton,
+		},
 	})
 	return start
 }
@@ -96,7 +98,7 @@ func (s *StartScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *StartScreen) View() tea.View {
-	return tea.NewView(s.style.Render(
+	v := tea.NewView(s.style.Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
 			s.name.View(),
@@ -107,4 +109,6 @@ func (s *StartScreen) View() tea.View {
 			),
 		),
 	))
+	v.AltScreen = true
+	return v
 }
