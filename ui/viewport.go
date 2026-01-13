@@ -12,9 +12,10 @@ type ViewPort struct {
 }
 
 type ViewPortOption struct {
-	Style   lipgloss.Style
-	Focus   bool
-	Actions []*ActionMap
+	Style    lipgloss.Style
+	Focus    bool
+	Actions  []*ActionMap
+	SoftWrap bool
 }
 
 func NewViewPort(opt ViewPortOption) *ViewPort {
@@ -23,6 +24,7 @@ func NewViewPort(opt ViewPortOption) *ViewPort {
 		viewport.WithHeight(opt.Style.GetHeight()),
 	)
 	vp.Style = opt.Style
+	vp.SoftWrap = opt.SoftWrap
 	return &ViewPort{
 		vp:      vp,
 		actions: opt.Actions,
@@ -35,12 +37,6 @@ func (v *ViewPort) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
-	case focusMsg:
-		v.vp.Style = v.vp.Style.
-			BorderForeground(lipgloss.Color("#FF5FAF"))
-	case blurMsg:
-		v.vp.Style = v.vp.Style.
-			BorderForeground(lipgloss.Color("#FFFFFF"))
 	case tea.KeyPressMsg:
 		for _, m := range v.actions {
 			if msg.String() == m.Msg {

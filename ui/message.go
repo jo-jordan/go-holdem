@@ -15,12 +15,11 @@ type Message struct {
 	box      *ViewPort
 	style    lipgloss.Style
 	text     *InputText
-	contents *Contents
+	contents []string
 }
 
 func NewMessage(style lipgloss.Style) *Message {
 	width := style.GetWidth()
-	// height := style.GetHeight()
 	m := new(Message)
 	m.style = lipgloss.NewStyle().
 		Width(width).
@@ -28,6 +27,7 @@ func NewMessage(style lipgloss.Style) *Message {
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("#FF5FAF"))
 	m.box = NewViewPort(ViewPortOption{
+		SoftWrap: true,
 		Style: lipgloss.NewStyle().
 			Width(width-MESSAGE_BORDER_WIDTH).
 			Height(MESSAGE_HEIGHT-MESSAGE_BORDER_WIDTH-1).
@@ -42,7 +42,7 @@ func NewMessage(style lipgloss.Style) *Message {
 		Title: ">",
 		Focus: true,
 	})
-	m.contents = NewContents(MAX_CONTENTS_LENGTH)
+	m.contents = make([]string, 0)
 
 	return m
 }
@@ -53,7 +53,7 @@ func (m *Message) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Key().Code {
 		case tea.KeyEnter:
-			m.send()
+			m.send(m.text.Value())
 		case tea.KeyUp:
 			m.box.vp.ScrollUp(1)
 		case tea.KeyDown:
@@ -65,6 +65,13 @@ func (m *Message) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			_, cmd = m.text.Update(msg)
 		}
+	case tea.WindowSizeMsg:
+		width := msg.Width
+		m.style = m.style.Width(width)
+		m.box.SetStyle(m.box.vp.Style.Width(width - 2))
+		_, cmd = m.box.Update(msg)
+	default:
+		_, cmd = m.text.Update(msg)
 	}
 	return nil, cmd
 }
@@ -77,67 +84,17 @@ func (m Message) View() string {
 	))
 }
 
-func (m *Message) send() {
-	v := m.text.Value()
-	if v == "" {
+func (m *Message) send(content string) {
+	if content == "" {
 		return
 	}
-	m.contents.Add(v)
+
+	m.contents = append(m.contents, content)
+	if len(m.contents) > MAX_CONTENTS_LENGTH {
+		m.contents = m.contents[1:]
+	}
+	// FROM here
 	m.text.text.SetValue("")
-	m.box.vp.SetContentLines(m.contents.Contents())
+	m.box.vp.SetContentLines(m.contents)
 	m.box.vp.GotoBottom()
-}
-
-type Contents struct {
-	start    int
-	end      int
-	contents []string
-}
-
-func NewContents(maxLength int) *Contents {
-	return &Contents{
-		start:    0,
-		end:      0,
-		contents: make([]string, maxLength),
-	}
-}
-
-func (c *Contents) Add(item string) {
-	c.contents[c.end] = item
-	c.end++
-
-	if c.end == len(c.contents) {
-		c.end = 0
-	}
-	if c.end == c.start {
-		c.start++
-		if c.start == len(c.contents) {
-			c.start = 0
-		}
-	}
-}
-
-func (c *Contents) Contents() []string {
-	var o []string
-	if c.start == c.end {
-		return o
-	} else if c.start < c.end {
-		o = make([]string, c.end-c.start)
-		for i := range c.end - c.start {
-			o[i] = c.contents[i]
-		}
-		return o
-	} else {
-		o = make([]string, len(c.contents))
-		// 0 1 2 3 4 5 6 7 8 9
-		l := len(c.contents) - c.end
-		for i := range l {
-			o[i] = c.contents[c.end+i]
-		}
-
-		for i := range c.end {
-			o[i+l] = c.contents[i]
-		}
-		return o
-	}
 }
