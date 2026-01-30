@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"regexp"
+
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -10,6 +12,7 @@ type InputText struct {
 	text    textinput.Model
 	style   lipgloss.Style
 	actions []*ActionMap
+	isNum   bool
 }
 
 type InputTextOption struct {
@@ -20,6 +23,7 @@ type InputTextOption struct {
 	Style       *lipgloss.Style
 	Focus       bool
 	Actions     []*ActionMap
+	IsNum       bool
 }
 
 func NewInputText(opt InputTextOption) *InputText {
@@ -47,6 +51,7 @@ func NewInputText(opt InputTextOption) *InputText {
 		text:    text,
 		style:   style,
 		actions: opt.Actions,
+		isNum:   opt.IsNum,
 	}
 }
 
@@ -58,6 +63,7 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 	var model tea.Model
+BLOCK:
 	switch msg := msg.(type) {
 	case focusMsg:
 		cmd = i.text.Focus()
@@ -69,8 +75,12 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == m.Msg {
 				model, cmd = m.Act()
 				cmds = append(cmds, cmd)
-				break
+				break BLOCK
 			}
+		}
+		// If isNum is enabled, only accept 0-9 and backspace
+		if i.isNum && digitalPattern.MatchString(msg.String()) && msg.Code != tea.KeyBackspace {
+			return nil, nil
 		}
 	}
 	i.text, cmd = i.text.Update(msg)
@@ -88,4 +98,12 @@ func (i InputText) View() string {
 
 func (i InputText) Value() string {
 	return i.text.Value()
+}
+
+var (
+	digitalPattern *regexp.Regexp
+)
+
+func init() {
+	digitalPattern, _ = regexp.Compile(`[^\d]`)
 }

@@ -1,7 +1,5 @@
 package entities
 
-import "net/netip"
-
 type PlayerStatus uint8
 
 const (
@@ -25,8 +23,15 @@ const (
 )
 
 type Player struct {
-	ID     string
-	Name   string
-	Addr   netip.AddrPort
+	Name string
+	// Addr   netip.AddrPort
 	Status PlayerStatus
+}
+
+func NewPlayer(name string) Player {
+	return Player{
+		Name: name,
+		// Addr: ,
+		Status: JOINING,
+	}
 }
