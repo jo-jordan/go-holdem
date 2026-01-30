@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/jo-jordan/go-holdem/entities"
 	"github.com/jo-jordan/go-holdem/ui"
 )
 
@@ -16,11 +17,16 @@ type StartScreen struct {
 	joinButton   *ui.Button
 }
 
-func NewStartSreen() *StartScreen {
+type StartScreenOpt struct {
+	PlayerName string
+}
+
+func NewStartScreen(opt StartScreenOpt) *StartScreen {
 	start := &StartScreen{
 		name: ui.NewInputText(ui.InputTextOption{
-			Title: "Input your name: ",
-			Focus: true,
+			Title:    "Input your name: ",
+			InitText: opt.PlayerName,
+			Focus:    true,
 			Actions: []*ui.ActionMap{
 				ui.TabToNext,
 				ui.EnterToNext,
@@ -29,7 +35,7 @@ func NewStartSreen() *StartScreen {
 		}),
 	}
 	start.createButton = ui.NewButton(ui.ButtonOption{
-		Value: "Create Game",
+		Value: "Create Room",
 		Actions: []*ui.ActionMap{
 			ui.TabToNext,
 			ui.ShiftTabToPrev,
@@ -40,7 +46,7 @@ func NewStartSreen() *StartScreen {
 					if name == "" {
 						return nil, nil
 					}
-					return NewGame(GameOption{Name: name, Style: start.style}), nil
+					return NewRootSetup(RoomSetupOps{Player: entities.NewPlayer(start.name.Value()), Style: start.style}), nil
 				},
 			},
 		},

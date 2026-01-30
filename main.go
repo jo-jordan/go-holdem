@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	p := tea.NewProgram(screens.NewStartSreen())
+	p := tea.NewProgram(screens.NewStartScreen(screens.StartScreenOpt{}))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
