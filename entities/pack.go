@@ -4,6 +4,7 @@ import "math/rand/v2"
 
 type Pack struct {
 	Cards []*Card
+	Index int
 }
 
 func NewPack() *Pack {
@@ -19,6 +20,7 @@ func NewPack() *Pack {
 	}
 	return &Pack{
 		Cards: cards,
+		Index: 0,
 	}
 }
 
