@@ -77,11 +77,13 @@ func (m *Message) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Message) View() string {
-	return m.style.Render(lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.box.View(),
-		m.text.View(),
-	))
+	return m.style.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.box.View(),
+			m.text.View(),
+		),
+	)
 }
 
 func (m *Message) send(content string) {
@@ -97,4 +99,8 @@ func (m *Message) send(content string) {
 	m.text.text.SetValue("")
 	m.box.vp.SetContentLines(m.contents)
 	m.box.vp.GotoBottom()
+}
+
+func (m *Message) Height() int {
+	return m.style.GetHeight()
 }

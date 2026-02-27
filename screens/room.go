@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/jo-jordan/go-holdem/entities"
 	"github.com/jo-jordan/go-holdem/ui"
 )
@@ -12,29 +13,43 @@ type Room struct {
 	screen
 	ui.CursorMove
 
-	name string
-	game entities.Game
+	name  string
+	game  entities.Game
+	seats [entities.MAX_SEAT]*ui.Seat
 
 	msgBox *ui.Message
 }
 
 type RoomOps struct {
+	Screen screen
 	Name   string
-	Style  lipgloss.Style
 	Player entities.Player
 }
 
 func NewRoom(opt RoomOps) *Room {
 	room := &Room{
-		name: opt.Name,
+		name:   opt.Name,
+		screen: opt.Screen,
 	}
-	return room.initUI(&opt).
-		initGame(&opt)
+	return room.
+		initUI().
+		initGame(&opt).
+		initSeats()
 }
 
-func (room *Room) initUI(opt *RoomOps) *Room {
-	room.style = opt.Style
-	room.msgBox = ui.NewMessage(opt.Style)
+func (room *Room) initSeats() *Room {
+	for i, player := range room.game.Players {
+		room.seats[i] = ui.NewSeat(ui.SeatOpt{
+			Num:    i + 1,
+			Player: player,
+		})
+	}
+
+	return room
+}
+
+func (room *Room) initUI() *Room {
+	room.msgBox = ui.NewMessage(room.screen.style)
 
 	room.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
 		Models: []ui.Elementer{
@@ -51,6 +66,7 @@ func (room *Room) initGame(opt *RoomOps) *Room {
 }
 
 func (room *Room) Init() tea.Cmd {
+	// init connection here
 	return textinput.Blink
 }
 
@@ -67,7 +83,25 @@ func (room *Room) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (room *Room) View() tea.View {
-	v := tea.NewView(room.msgBox.View())
+	seats := make([]string, len(room.seats))
+	for i := range seats {
+		seats[i] = room.seats[i].View()
+	}
+	t := table.New().Border(lipgloss.HiddenBorder())
+	t.Row(seats[0:4]...)
+	t.Row(seats[4], "", "", seats[5])
+	t.Row(seats[6:10]...)
+	v := tea.NewView(
+		lipgloss.JoinVertical(
+			lipgloss.Top,
+			lipgloss.NewStyle().
+				Height(room.screen.style.GetHeight()-room.msgBox.Height()).
+				Width(room.screen.style.GetWidth()).
+				Border(lipgloss.NormalBorder()).
+				Render(t.Render()),
+			room.msgBox.View(),
+		),
+	)
 	v.AltScreen = true
 	return v
 }

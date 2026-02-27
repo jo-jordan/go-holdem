@@ -34,7 +34,14 @@ func NewStartScreen(opt StartScreenOpt) *StartScreen {
 			},
 		}),
 	}
-	start.createButton = ui.NewButton(ui.ButtonOption{
+	return start.
+		initCreateButton().
+		initJoinButton().
+		initCursorMove()
+}
+
+func (s *StartScreen) initCreateButton() *StartScreen {
+	s.createButton = ui.NewButton(ui.ButtonOption{
 		Value: "Create Room",
 		Actions: []*ui.ActionMap{
 			ui.TabToNext,
@@ -42,16 +49,20 @@ func NewStartScreen(opt StartScreenOpt) *StartScreen {
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
-					name := start.name.Value()
+					name := s.name.Value()
 					if name == "" {
 						return nil, nil
 					}
-					return NewRootSetup(RoomSetupOps{Player: entities.NewPlayer(start.name.Value()), Style: start.style}), nil
+					return NewRootSetup(RoomSetupOps{Player: entities.NewPlayer(s.name.Value()), Screen: s.screen}), nil
 				},
 			},
 		},
 	})
-	start.joinButton = ui.NewButton(ui.ButtonOption{
+	return s
+}
+
+func (s *StartScreen) initJoinButton() *StartScreen {
+	s.joinButton = ui.NewButton(ui.ButtonOption{
 		Value: "Join in",
 		Actions: []*ui.ActionMap{
 			ui.TabToNext,
@@ -59,23 +70,27 @@ func NewStartScreen(opt StartScreenOpt) *StartScreen {
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
-					name := start.name.Value()
+					name := s.name.Value()
 					if name == "" {
 						return nil, nil
 					}
-					return NewJoinGame(JoinGameOption{Name: name, Style: start.style}), nil
+					return NewJoinGame(JoinGameOption{Name: name, Style: s.style}), nil
 				},
 			},
 		},
 	})
-	start.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
+	return s
+}
+
+func (s *StartScreen) initCursorMove() *StartScreen {
+	s.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
 		Models: []ui.Elementer{
-			start.name,
-			start.createButton,
-			start.joinButton,
+			s.name,
+			s.createButton,
+			s.joinButton,
 		},
 	})
-	return start
+	return s
 }
 
 func (s *StartScreen) WithStyle(style *lipgloss.Style) *StartScreen {

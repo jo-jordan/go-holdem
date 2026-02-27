@@ -21,11 +21,10 @@ type RoomSetup struct {
 	backButton       *ui.Button
 
 	player entities.Player
-	style  lipgloss.Style
 }
 
 type RoomSetupOps struct {
-	Style  lipgloss.Style
+	Screen screen
 	Player entities.Player
 }
 
@@ -38,7 +37,7 @@ func NewRootSetup(ops RoomSetupOps) *RoomSetup {
 		initCancelButton()
 
 	roomSetup.player = ops.Player
-	roomSetup.style = ops.Style
+	roomSetup.screen = ops.Screen
 	roomSetup.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
 		Models: []ui.Elementer{
 			roomSetup.nameInput,
@@ -107,8 +106,9 @@ func (roomSetup *RoomSetup) initStartButton() *RoomSetup {
 					Msg: "enter",
 					Act: func() (tea.Model, tea.Cmd) {
 						return NewRoom(RoomOps{
-							Name:  roomSetup.nameInput.Value(),
-							Style: roomSetup.style,
+							Name:   roomSetup.nameInput.Value(),
+							Player: roomSetup.player,
+							Screen: roomSetup.screen,
 						}), nil
 					},
 				},
@@ -219,7 +219,7 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 					if target == "" {
 						return nil, nil
 					}
-					return NewRoom(RoomOps{Name: target, Style: game.style}), nil
+					return NewRoom(RoomOps{Name: target}), nil
 				},
 			},
 		},

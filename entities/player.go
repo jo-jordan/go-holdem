@@ -25,7 +25,10 @@ const (
 type Player struct {
 	Name string
 	// Addr   netip.AddrPort
-	Status PlayerStatus
+	Status  PlayerStatus
+	Account int
+	Card1   *Card
+	Card2   *Card
 }
 
 func NewPlayer(name string) Player {

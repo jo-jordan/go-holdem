@@ -1,8 +1,11 @@
 package entities
 
 import (
-	"errors"
 	"sync"
+)
+
+const (
+	MAX_SEAT = 10
 )
 
 type Game struct {
@@ -10,14 +13,16 @@ type Game struct {
 
 	Round   uint
 	Players []*Player
-	Seat    Seat
 }
 
 func NewGame() *Game {
+	players := make([]*Player, MAX_SEAT)
+	for i := range MAX_SEAT {
+		players[i] = nil
+	}
 	return &Game{
 		Round:   0,
-		Players: make([]*Player, 0),
-		Seat:    newSeat(),
+		Players: players,
 	}
 }
 
@@ -25,24 +30,11 @@ func (g *Game) AddPlayer(player *Player) error {
 	g.mut.Lock()
 	defer g.mut.Unlock()
 
-	if len(g.Players) >= SEAT_COUNT {
-		return errors.New("Full")
+	for i := range MAX_SEAT {
+		if g.Players[i] == nil {
+			g.Players[i] = player
+			break
+		}
 	}
-
-	g.Players = append(g.Players, player)
 	return nil
-}
-
-const (
-	SEAT_COUNT = 10
-)
-
-type Seat map[int]*Player
-
-func newSeat() Seat {
-	seat := make(Seat, SEAT_COUNT)
-	for i := range 10 {
-		seat[i+1] = nil
-	}
-	return seat
 }
