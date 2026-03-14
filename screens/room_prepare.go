@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -105,10 +106,14 @@ func (roomSetup *RoomSetup) initStartButton() *RoomSetup {
 				{
 					Msg: "enter",
 					Act: func() (tea.Model, tea.Cmd) {
+						initAccount, _ := strconv.Atoi(roomSetup.initAccountInput.Value())
+						smallBlind, _ := strconv.Atoi(roomSetup.smallBlindInput.Value())
 						return NewRoom(RoomOps{
-							Name:   roomSetup.nameInput.Value(),
-							Player: roomSetup.player,
-							Screen: roomSetup.screen,
+							Name:        roomSetup.nameInput.Value(),
+							SmallBlind:  uint(smallBlind),
+							InitAccount: uint(initAccount),
+							Player:      roomSetup.player,
+							Screen:      roomSetup.screen,
 						}), nil
 					},
 				},

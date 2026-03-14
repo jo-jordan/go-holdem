@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	Cmd "github.com/jo-jordan/go-holdem/cmd"
 )
 
 type Button struct {
@@ -41,9 +42,9 @@ func (b *Button) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var model tea.Model
 	switch msg := msg.(type) {
-	case focusMsg:
+	case Cmd.FocusMsg:
 		b.focus = true
-	case blurMsg:
+	case Cmd.BlurMsg:
 		b.focus = false
 	case tea.KeyPressMsg:
 		for _, m := range b.actions {
@@ -60,7 +61,7 @@ func (b Button) View() string {
 	style := b.style
 	if b.focus {
 		style = b.style.
-			Background(lipgloss.Color("#FF5FAF")).
+			Background(lipgloss.Color(FOCUS_COLOR)).
 			Foreground(lipgloss.Color("#FFFFFF"))
 	}
 	return style.Render(b.value)

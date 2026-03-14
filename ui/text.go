@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	Cmd "github.com/jo-jordan/go-holdem/cmd"
 )
 
 type InputText struct {
@@ -65,10 +66,10 @@ func (i *InputText) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var model tea.Model
 BLOCK:
 	switch msg := msg.(type) {
-	case focusMsg:
+	case Cmd.FocusMsg:
 		cmd = i.text.Focus()
 		cmds = append(cmds, cmd)
-	case blurMsg:
+	case Cmd.BlurMsg:
 		i.text.Blur()
 	case tea.KeyPressMsg:
 		for _, m := range i.actions {
@@ -91,7 +92,7 @@ BLOCK:
 func (i InputText) View() string {
 	style := i.style
 	if i.text.Focused() {
-		style = style.BorderForeground(lipgloss.Color("#FF5FAF"))
+		style = style.BorderForeground(lipgloss.Color(FOCUS_COLOR))
 	}
 	return style.Render(i.text.View())
 }

@@ -2,15 +2,8 @@ package ui
 
 import (
 	tea "charm.land/bubbletea/v2"
+	Cmd "github.com/jo-jordan/go-holdem/cmd"
 )
-
-type MoveToPrevMsg struct{}
-
-type MoveToNextMsg struct{}
-
-type focusMsg struct{}
-
-type blurMsg struct{}
 
 type CursorMove struct {
 	index  int
@@ -34,10 +27,10 @@ func (c *CursorMove) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var model tea.Model
 	var cmd tea.Cmd
 	switch msg.(type) {
-	case MoveToNextMsg:
+	case Cmd.MoveToNextMsg:
 		c.index++
 		c.index = c.index % len(c.models)
-	case MoveToPrevMsg:
+	case Cmd.MoveToPrevMsg:
 		c.index--
 		if c.index < 0 {
 			c.index = len(c.models) - 1
@@ -47,27 +40,21 @@ func (c *CursorMove) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
-	_, cmd = c.models[currentIndex].Update(blurMsg{})
-	_, cmd = c.models[c.index].Update(focusMsg{})
+	_, cmd = c.models[currentIndex].Update(Cmd.BlurMsg{})
+	_, cmd = c.models[c.index].Update(Cmd.FocusMsg{})
 	return nil, cmd
 }
 
 func MoveToNext() (tea.Model, tea.Cmd) {
 	return nil, func() tea.Msg {
-		return MoveToNextMsg{}
+		return Cmd.MoveToNextMsg{}
 	}
 }
 
 func MoveToPrev() (tea.Model, tea.Cmd) {
 	return nil, func() tea.Msg {
-		return MoveToPrevMsg{}
+		return Cmd.MoveToPrevMsg{}
 	}
-}
-
-type IngoreQuitMsg struct{}
-
-func IgnoreQuitCmd() tea.Msg {
-	return IngoreQuitMsg{}
 }
 
 type ActionMap struct {

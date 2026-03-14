@@ -23,8 +23,7 @@ const (
 )
 
 type Player struct {
-	Name string
-	// Addr   netip.AddrPort
+	Name    string
 	Status  PlayerStatus
 	Account int
 	Card1   *Card
@@ -33,8 +32,7 @@ type Player struct {
 
 func NewPlayer(name string) Player {
 	return Player{
-		Name: name,
-		// Addr: ,
+		Name:   name,
 		Status: JOINING,
 	}
 }

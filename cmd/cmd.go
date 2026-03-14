@@ -75,3 +75,21 @@ type ChatCmd struct {
 	SenderID string `json:"sender_id"`
 	Content  string `json:"content"`
 }
+
+// TableFocusMsg is used in screen/room.go, which is for switching to focus on table
+type TableFocusMsg struct{}
+
+// MsgFocusMsg is used in screen/room.go, which is for switching to focus on message
+type MsgFocusMsg struct{}
+
+// FocusMsg is to trigger focusing on an element or component
+type FocusMsg struct{}
+
+// BlurMsg is to trigger focusing on an element or component
+type BlurMsg struct{}
+
+// MoveToPrevMsg is for focusing on preview element
+type MoveToPrevMsg struct{}
+
+// MoveToNextMsg is for focusing on next element
+type MoveToNextMsg struct{}

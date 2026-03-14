@@ -8,19 +8,6 @@ import (
 	P "github.com/jo-jordan/go-holdem/entities"
 )
 
-var (
-	activeStyle = lipgloss.
-			NewStyle().
-			Border(
-			lipgloss.NormalBorder(),
-		).
-		Height(3).
-		Width(20).
-		BorderForeground(lipgloss.Color("#FFFFF"))
-	inactiveStyle = activeStyle.
-			BorderForeground(lipgloss.Color("#CCCCCC"))
-)
-
 type Seat struct {
 	num    int
 	player *P.Player
@@ -31,13 +18,14 @@ type Seat struct {
 type SeatOpt struct {
 	Num    int
 	Player *P.Player
+	Style  lipgloss.Style
 }
 
 func NewSeat(opt SeatOpt) *Seat {
 	return &Seat{
 		num:    opt.Num,
 		player: opt.Player,
-		style:  inactiveStyle,
+		style:  opt.Style,
 	}
 }
 

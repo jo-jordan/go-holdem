@@ -11,8 +11,10 @@ const (
 type Game struct {
 	mut sync.Mutex
 
-	Round   uint
-	Players []*Player
+	Round       uint
+	SmallBlind  uint
+	InitAccount uint
+	Players     []*Player
 }
 
 func NewGame() *Game {

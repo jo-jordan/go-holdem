@@ -3,10 +3,11 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	Cmd "github.com/jo-jordan/go-holdem/cmd"
 )
 
 const (
-	MESSAGE_HEIGHT       = 7
+	TABLE_HEIGHT         = 25 // This value should be same as the height of table
 	MESSAGE_BORDER_WIDTH = 2
 	MAX_CONTENTS_LENGTH  = 1000
 )
@@ -23,16 +24,16 @@ func NewMessage(style lipgloss.Style) *Message {
 	m := new(Message)
 	m.style = lipgloss.NewStyle().
 		Width(width).
-		Height(MESSAGE_HEIGHT).
+		Height(style.GetHeight() - TABLE_HEIGHT).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("#FF5FAF"))
+		BorderForeground(lipgloss.Color(NORMAL_COLOR))
 	m.box = NewViewPort(ViewPortOption{
 		SoftWrap: true,
 		Style: lipgloss.NewStyle().
 			Width(width-MESSAGE_BORDER_WIDTH).
-			Height(MESSAGE_HEIGHT-MESSAGE_BORDER_WIDTH-1).
+			Height(style.GetHeight()-TABLE_HEIGHT-3).
 			Border(lipgloss.ThickBorder(), false, false, true, false).
-			BorderBottomForeground(lipgloss.Color("#C0C0C0")),
+			BorderBottomForeground(lipgloss.Color(NORMAL_COLOR)),
 		Actions: []*ActionMap{
 			TabToNext,
 			ShiftTabToPrev,
@@ -40,7 +41,7 @@ func NewMessage(style lipgloss.Style) *Message {
 	})
 	m.text = NewInputText(InputTextOption{
 		Title: ">",
-		Focus: true,
+		Focus: false,
 	})
 	m.contents = make([]string, 0)
 
@@ -62,14 +63,23 @@ func (m *Message) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.box.vp.PageUp()
 		case tea.KeyPgDown:
 			m.box.vp.PageDown()
+		case tea.KeyEsc:
+			m.style = m.style.BorderForeground(lipgloss.Color(NORMAL_COLOR))
+			cmd = func() tea.Msg {
+				return Cmd.TableFocusMsg{}
+			}
 		default:
 			_, cmd = m.text.Update(msg)
 		}
 	case tea.WindowSizeMsg:
 		width := msg.Width
-		m.style = m.style.Width(width)
+		height := msg.Height
+		m.style = m.style.Width(width).Height(height - TABLE_HEIGHT - 3)
 		m.box.SetStyle(m.box.vp.Style.Width(width - 2))
 		_, cmd = m.box.Update(msg)
+	case Cmd.MsgFocusMsg:
+		m.style = m.style.BorderForeground(lipgloss.Color(FOCUS_COLOR))
+		_, cmd = m.text.Update(Cmd.FocusMsg{})
 	default:
 		_, cmd = m.text.Update(msg)
 	}
