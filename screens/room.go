@@ -10,10 +10,10 @@ import (
 	"github.com/jo-jordan/go-holdem/ui"
 )
 
-type FocusType uint8
+type focusType uint8
 
 const (
-	TABLE FocusType = iota
+	TABLE focusType = iota
 	MESSAGE
 )
 
@@ -23,15 +23,11 @@ type Room struct {
 	name string
 	game entities.Game
 
-	player        *entities.Player
-	seats         [entities.MAX_SEAT]*ui.Seat
-	seatsStyle    lipgloss.Style
-	actKeys       []string
-	acts          []*ui.Button
-	msgBox        *ui.Message
-	focusOn       FocusType
-	fnActive      bool
-	selectFnIndex int
+	player  *entities.Player
+	seat    Seat
+	actions Actions
+	msgBox  *ui.Message
+	status  Status
 }
 
 type RoomOps struct {
@@ -44,23 +40,19 @@ type RoomOps struct {
 
 func NewRoom(opt RoomOps) *Room {
 	room := &Room{
-		name:          opt.Name,
-		screen:        opt.Screen,
-		selectFnIndex: -1,
+		name:   opt.Name,
+		screen: opt.Screen,
+		status: initStatus(),
 	}
 	return room.
-		initUI().
 		initGame(&opt).
+		initUI().
 		initActs().
 		initSeats()
 }
 
 func (room *Room) initActs() *Room {
-	acts := []struct {
-		text    string
-		quick   string
-		actions []*ui.ActionMap
-	}{
+	acts := []actConf{
 		{
 			text:  "Check",
 			quick: "c",
@@ -118,41 +110,30 @@ func (room *Room) initActs() *Room {
 		Border(lipgloss.NormalBorder()).
 		Width(maxLength + 2)
 
-	room.actKeys = make([]string, len(acts))
-	room.acts = make([]*ui.Button, len(acts))
-	for i, v := range acts {
-		room.actKeys[i] = v.quick
-		room.acts[i] = ui.NewButton(ui.ButtonOption{
-			Value:   v.text,
-			Style:   &style,
-			Actions: v.actions,
-		})
-	}
+	room.actions = initActions(&style, acts)
 	return room
 }
 
 func (room *Room) initSeats() *Room {
+	room.seat = initSeat(room.style.GetWidth())
 	for i, player := range room.game.Players {
 		s := seatStyle
 		if player != nil && *room.player == *player {
 			s = focusSeatStyle
 		}
-		room.seats[i] = ui.NewSeat(ui.SeatOpt{
+		room.seat.setSeat(i, ui.NewSeat(ui.SeatOpt{
 			Num:    i + 1,
 			Player: player,
 			Style:  s,
-		})
+		}))
 	}
 
-	room.seatsStyle = lipgloss.NewStyle().
-		Width(room.screen.style.GetWidth()).
-		Border(lipgloss.NormalBorder())
 	room.focusOnGame()
 	return room
 }
 
 func (room *Room) initUI() *Room {
-	room.msgBox = ui.NewMessage(room.screen.style)
+	room.msgBox = ui.NewMessage(room.player, room.screen.style)
 
 	width := room.screen.style.GetWidth()
 	// calculate the width of each seat
@@ -161,8 +142,8 @@ func (room *Room) initUI() *Room {
 	focusSeatStyle = focusSeatStyle.Width(seatWidth)
 	return room
 }
-
 func (room *Room) initGame(opt *RoomOps) *Room {
+
 	room.player = &opt.Player
 	opt.Player.Account = int(opt.InitAccount)
 	room.game = *entities.NewGame()
@@ -201,7 +182,7 @@ func (room *Room) View() tea.View {
 	v := tea.NewView(
 		lipgloss.JoinVertical(
 			lipgloss.Top,
-			room.seatsStyle.Render(
+			room.seat.style.Render(
 				lipgloss.JoinVertical(lipgloss.Top,
 					gameTable.Render(),
 					actTable.Render(),
@@ -215,11 +196,7 @@ func (room *Room) View() tea.View {
 }
 
 func (room *Room) gameTable() table.Table {
-	seats := make([]string, len(room.seats))
-	for i := range seats {
-		seats[i] = room.seats[i].View()
-	}
-
+	seats := room.seat.seatView()
 	t := table.
 		New().
 		Border(lipgloss.HiddenBorder()).
@@ -231,54 +208,35 @@ func (room *Room) gameTable() table.Table {
 
 // Maybe optimize this method for performance
 func (room *Room) actTable() table.Table {
-	acts := make([]string, len(room.acts))
-	for i := range acts {
-		acts[i] = room.acts[i].View()
-	}
+	acts := room.actions.actionView()
 	actTable := table.
 		New().
 		Border(lipgloss.HiddenBorder())
 
-	if room.fnActive {
-		actTable.Row(room.actKeys...)
-	} else {
-		quickKeys := make([]string, len(room.actKeys))
-		actTable.Row(quickKeys...)
-	}
-
+	actTable.Row(room.actions.keyView(room.status.isActActive)...)
 	actTable.Row(acts...)
 	return *actTable
 }
 
 func (room *Room) selectFocusAct(k string) tea.Cmd {
-	var cmd tea.Cmd
-	for index, key := range room.actKeys {
+	for index, key := range room.actions.actKeys {
 		if key == k {
-			// cancel current focus
-			if room.selectFnIndex != -1 {
-				_, cmd = room.acts[room.selectFnIndex].Update(Cmd.BlurMsg{})
-			}
-			room.selectFnIndex = index
-			_, cmd = room.acts[index].Update(Cmd.FocusMsg{})
-			return cmd
+			return tea.Batch(room.actions.blur(), room.actions.focusAt(index))
 		}
 	}
-	room.selectFnIndex = -1
-	return cmd
+	return nil
 }
 
 func (room *Room) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	var cmd tea.Cmd
-	if room.focusOn == TABLE {
+	if room.status.isFocusOnTable() {
 		switch key := msg.String(); key {
 		case "space":
-			room.fnActive = !room.fnActive
+			room.status.toggle()
 		case "c", "a", "r", "f", "s", "i", "q":
 			cmd = room.selectFocusAct(key)
 		case "enter":
-			if 0 <= room.selectFnIndex && room.selectFnIndex < len(room.acts) {
-				_, cmd = room.acts[room.selectFnIndex].Update(msg)
-			}
+			_, cmd = room.actions.update(msg)
 		}
 	} else {
 		_, cmd = room.msgBox.Update(msg)
@@ -287,23 +245,153 @@ func (room *Room) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 func (room *Room) focusOnGame() {
-	room.focusOn = TABLE
-	room.seatsStyle = room.seatsStyle.BorderForeground(lipgloss.Color(ui.FOCUS_COLOR))
+	room.status.focusOn(TABLE)
+	room.seat.focus()
 }
 
 func (room *Room) focusOnMsg(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	cmds := make([]tea.Cmd, 0)
-	room.focusOn = MESSAGE
-	room.fnActive = false
-	room.seatsStyle = room.seatsStyle.BorderForeground(lipgloss.Color(ui.NORMAL_COLOR))
-	_, cmd = room.acts[room.selectFnIndex].Update(Cmd.BlurMsg{})
+	room.status.focusOn(MESSAGE)
+	room.status.isActActive = false
+	room.seat.blur()
+	cmd = room.actions.blur()
 	cmds = append(cmds, cmd)
-	room.selectFnIndex = -1
 
 	_, cmd = room.msgBox.Update(msg)
 	cmds = append(cmds, cmd)
 	return tea.Batch(cmds...)
+}
+
+type Seat struct {
+	seats [entities.MAX_SEAT]*ui.Seat
+	style lipgloss.Style
+}
+
+func initSeat(width int) Seat {
+	seat := Seat{
+		style: lipgloss.NewStyle().
+			Width(width).
+			Border(lipgloss.NormalBorder()),
+	}
+
+	return seat
+}
+
+func (seat *Seat) setSeat(index int, s *ui.Seat) {
+	seat.seats[index] = s
+}
+
+func (seat *Seat) seatView() []string {
+	seats := make([]string, len(seat.seats))
+	for i := range seats {
+		seats[i] = seat.seats[i].View()
+	}
+	return seats
+}
+
+func (seat *Seat) focus() {
+	seat.style = seat.style.BorderForeground(lipgloss.Color(ui.FOCUS_COLOR))
+}
+
+func (seat *Seat) blur() {
+	seat.style = seat.style.BorderForeground(lipgloss.Color(ui.NORMAL_COLOR))
+}
+
+type actConf struct {
+	text    string
+	quick   string
+	actions []*ui.ActionMap
+}
+
+type Actions struct {
+	actKeys []string
+	acts    []*ui.Button
+	current int
+}
+
+func initActions(style *lipgloss.Style, acts []actConf) Actions {
+	actions := Actions{
+		current: -1,
+	}
+	actions.actKeys = make([]string, len(acts))
+	actions.acts = make([]*ui.Button, len(acts))
+	for i, v := range acts {
+		actions.actKeys[i] = v.quick
+		actions.acts[i] = ui.NewButton(ui.ButtonOption{
+			Value:   v.text,
+			Style:   style,
+			Actions: v.actions,
+		})
+	}
+
+	return actions
+}
+
+func (actions Actions) actionView() []string {
+	acts := make([]string, len(actions.acts))
+	for i := range acts {
+		acts[i] = actions.acts[i].View()
+	}
+	return acts
+}
+
+func (actions Actions) keyView(active bool) []string {
+	if active {
+		return actions.actKeys
+	} else {
+		return make([]string, len(actions.actKeys))
+	}
+}
+
+func (actions *Actions) focusAt(index int) tea.Cmd {
+	actions.current = index
+	_, cmd := actions.acts[actions.current].Update(Cmd.FocusMsg{})
+	return cmd
+}
+
+func (actions *Actions) blur() tea.Cmd {
+	if actions.current == -1 {
+		return nil
+	}
+	_, cmd := actions.acts[actions.current].Update(Cmd.BlurMsg{})
+	actions.current = -1
+	return cmd
+}
+
+func (actions Actions) len() int {
+	return len(actions.acts)
+}
+
+func (actions *Actions) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if actions.current != -1 {
+		return actions.acts[actions.current].Update(msg)
+	}
+	return nil, nil
+}
+
+type Status struct {
+	focusOnType focusType
+	isActActive bool
+}
+
+func initStatus() Status {
+	return Status{
+		focusOnType: TABLE,
+		isActActive: false,
+	}
+}
+
+func (s Status) isFocusOnTable() bool {
+	return s.focusOnType == TABLE
+}
+
+func (s *Status) toggle() {
+	s.isActActive = !s.isActActive
+}
+
+func (s *Status) focusOn(t focusType) {
+	s.focusOnType = t
 }
 
 var (

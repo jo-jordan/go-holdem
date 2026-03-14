@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	Cmd "github.com/jo-jordan/go-holdem/cmd"
+	"github.com/jo-jordan/go-holdem/entities"
 )
 
 const (
@@ -17,9 +20,10 @@ type Message struct {
 	style    lipgloss.Style
 	text     *InputText
 	contents []string
+	player   *entities.Player
 }
 
-func NewMessage(style lipgloss.Style) *Message {
+func NewMessage(player *entities.Player, style lipgloss.Style) *Message {
 	width := style.GetWidth()
 	m := new(Message)
 	m.style = lipgloss.NewStyle().
@@ -43,6 +47,7 @@ func NewMessage(style lipgloss.Style) *Message {
 		Title: ">",
 		Focus: false,
 	})
+	m.player = player
 	m.contents = make([]string, 0)
 
 	return m
@@ -54,7 +59,7 @@ func (m *Message) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Key().Code {
 		case tea.KeyEnter:
-			m.send(m.text.Value())
+			m.send(fmt.Sprintf("%s: %s", m.player.Name, m.text.Value()))
 		case tea.KeyUp:
 			m.box.vp.ScrollUp(1)
 		case tea.KeyDown:
@@ -105,12 +110,9 @@ func (m *Message) send(content string) {
 	if len(m.contents) > MAX_CONTENTS_LENGTH {
 		m.contents = m.contents[1:]
 	}
-	// FROM here
+	// clear input text
 	m.text.text.SetValue("")
+	// set message history
 	m.box.vp.SetContentLines(m.contents)
 	m.box.vp.GotoBottom()
-}
-
-func (m *Message) Height() int {
-	return m.style.GetHeight()
 }
