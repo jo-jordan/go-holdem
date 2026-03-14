@@ -19,7 +19,7 @@ type Message struct {
 	box      *ViewPort
 	style    lipgloss.Style
 	text     *InputText
-	contents []string
+	contents ringContents
 	player   *entities.Player
 }
 
@@ -48,7 +48,7 @@ func NewMessage(player *entities.Player, style lipgloss.Style) *Message {
 		Focus: false,
 	})
 	m.player = player
-	m.contents = make([]string, 0)
+	m.contents = ringContents{}
 
 	return m
 }
@@ -106,13 +106,40 @@ func (m *Message) send(content string) {
 		return
 	}
 
-	m.contents = append(m.contents, content)
-	if len(m.contents) > MAX_CONTENTS_LENGTH {
-		m.contents = m.contents[1:]
-	}
+	m.contents.append(content)
 	// clear input text
 	m.text.text.SetValue("")
 	// set message history
-	m.box.vp.SetContentLines(m.contents)
+	m.box.vp.SetContentLines(m.contents.lines())
 	m.box.vp.GotoBottom()
+}
+
+type ringContents struct {
+	contents [MAX_CONTENTS_LENGTH]string
+	pointer  uint
+	length   uint
+}
+
+func (r *ringContents) append(content string) {
+	r.contents[r.pointer] = content
+	r.pointer++
+	if r.pointer == MAX_CONTENTS_LENGTH {
+		r.pointer = 0
+	}
+	if r.length < MAX_CONTENTS_LENGTH {
+		r.length++
+	}
+}
+
+func (r *ringContents) lines() []string {
+	contents := make([]string, r.length)
+
+	if r.length == MAX_CONTENTS_LENGTH {
+		copy(contents[0:r.length-r.pointer], r.contents[r.pointer:r.length])
+		copy(contents[r.length-r.pointer:r.length], r.contents[0:r.pointer])
+	} else {
+		copy(contents[0:r.length], r.contents[0:r.length])
+	}
+
+	return contents
 }
