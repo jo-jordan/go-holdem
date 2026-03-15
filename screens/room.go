@@ -220,9 +220,13 @@ func (room *Room) actTable() table.Table {
 
 func (room *Room) selectFocusAct(k string) tea.Cmd {
 	for index, key := range room.actions.actKeys {
-		if key == k {
-			return tea.Batch(room.actions.blur(), room.actions.focusAt(index))
+		if key != k {
+			continue
 		}
+		if room.actions.current == index {
+			return room.actions.blur()
+		}
+		return tea.Batch(room.actions.blur(), room.actions.focusAt(index))
 	}
 	return nil
 }
@@ -233,6 +237,9 @@ func (room *Room) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		switch key := msg.String(); key {
 		case "space":
 			room.status.toggle()
+			if !room.status.isActActive {
+				room.actions.blur()
+			}
 		case "c", "a", "r", "f", "s", "i", "q":
 			cmd = room.selectFocusAct(key)
 		case "enter":
@@ -357,10 +364,6 @@ func (actions *Actions) blur() tea.Cmd {
 	_, cmd := actions.acts[actions.current].Update(Cmd.BlurMsg{})
 	actions.current = -1
 	return cmd
-}
-
-func (actions Actions) len() int {
-	return len(actions.acts)
 }
 
 func (actions *Actions) update(msg tea.Msg) (tea.Model, tea.Cmd) {

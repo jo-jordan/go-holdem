@@ -69,8 +69,9 @@ func (roomSetup *RoomSetup) initName() *RoomSetup {
 func (roomSetup *RoomSetup) initAccount() *RoomSetup {
 	roomSetup.initAccountInput = ui.NewInputText(
 		ui.InputTextOption{
-			Title: "Initial Account: ",
-			IsNum: true,
+			Title:     "Initial Account: ",
+			IsNum:     true,
+			TextWidth: ACCOUNT_WIDTH,
 			Actions: []*ui.ActionMap{
 				ui.TabToNext,
 				ui.EnterToNext,
@@ -84,8 +85,9 @@ func (roomSetup *RoomSetup) initAccount() *RoomSetup {
 func (roomSetup *RoomSetup) initSmallBlind() *RoomSetup {
 	roomSetup.smallBlindInput = ui.NewInputText(
 		ui.InputTextOption{
-			Title: "Small Blind: ",
-			IsNum: true,
+			Title:     "Small Blind: ",
+			IsNum:     true,
+			TextWidth: ACCOUNT_WIDTH,
 			Actions: []*ui.ActionMap{
 				ui.TabToNext,
 				ui.EnterToNext,
@@ -108,6 +110,9 @@ func (roomSetup *RoomSetup) initStartButton() *RoomSetup {
 					Act: func() (tea.Model, tea.Cmd) {
 						initAccount, _ := strconv.Atoi(roomSetup.initAccountInput.Value())
 						smallBlind, _ := strconv.Atoi(roomSetup.smallBlindInput.Value())
+						if initAccount < smallBlind {
+							return nil, nil
+						}
 						return NewRoom(RoomOps{
 							Name:        roomSetup.nameInput.Value(),
 							SmallBlind:  uint(smallBlind),
@@ -150,16 +155,21 @@ func (roomSetup *RoomSetup) Init() tea.Cmd {
 }
 
 func (roomSetup *RoomSetup) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	var model tea.Model
-	cmd := roomSetup.screen.Update(msg)
-	if cmd != nil {
-		return roomSetup, cmd
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg, tea.WindowSizeMsg:
+		cmd := roomSetup.screen.Update(msg)
+		if cmd != nil {
+			return roomSetup, cmd
+		}
 	}
 
 	model, cmd = roomSetup.CursorMove.Update(msg)
 	if model == nil {
 		model = roomSetup
 	}
+
 	return model, cmd
 }
 
@@ -198,21 +208,34 @@ type JoinGameOption struct {
 }
 
 func NewJoinGame(opt JoinGameOption) *JoinGame {
-	game := JoinGame{
-		name: opt.Name,
-		target: ui.NewInputText(ui.InputTextOption{
-			Title: "Target: ",
-			Focus: true,
-			Actions: []*ui.ActionMap{
-				ui.TabToNext,
-				ui.EnterToNext,
-				ui.ShiftTabToPrev,
-			},
-		}),
+	game := &JoinGame{
+		name:   opt.Name,
+		player: opt.Player,
 	}
+	game.style = opt.Style
+	return game.initTarget().
+		initJoinButton().
+		initCancelButton().
+		initUI()
+}
 
-	game.player = opt.Player
-	game.joinButton = ui.NewButton(ui.ButtonOption{
+func (g *JoinGame) initTarget() *JoinGame {
+	g.target = ui.NewInputText(ui.InputTextOption{
+		Title:     "Target: ",
+		Focus:     true,
+		TextWidth: ACCOUNT_WIDTH,
+		Actions: []*ui.ActionMap{
+			ui.TabToNext,
+			ui.EnterToNext,
+			ui.ShiftTabToPrev,
+		},
+	},
+	)
+	return g
+}
+
+func (g *JoinGame) initJoinButton() *JoinGame {
+	g.joinButton = ui.NewButton(ui.ButtonOption{
 		Value: "Join",
 		Actions: []*ui.ActionMap{
 			ui.TabToNext,
@@ -220,7 +243,7 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			{
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
-					target := game.target.Value()
+					target := g.target.Value()
 					if target == "" {
 						return nil, nil
 					}
@@ -229,7 +252,11 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 			},
 		},
 	})
-	game.cancelButton = ui.NewButton(ui.ButtonOption{
+	return g
+}
+
+func (g *JoinGame) initCancelButton() *JoinGame {
+	g.cancelButton = ui.NewButton(ui.ButtonOption{
 		Value: "Cancel",
 		Actions: []*ui.ActionMap{
 			ui.TabToNext,
@@ -238,21 +265,25 @@ func NewJoinGame(opt JoinGameOption) *JoinGame {
 				Msg: "enter",
 				Act: func() (tea.Model, tea.Cmd) {
 					return NewStartScreen(StartScreenOpt{
-						PlayerName: game.player.Name,
-					}).WithStyle(&game.style), nil
+						PlayerName: g.player.Name,
+					}).WithStyle(&g.style), nil
 				},
 			},
 		},
 	})
-	game.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
+	return g
+}
+
+func (g *JoinGame) initUI() *JoinGame {
+	g.CursorMove = ui.NewCursorMove(ui.CursorMoveOption{
 		Models: []ui.Elementer{
-			game.target,
-			game.joinButton,
-			game.cancelButton,
+			g.target,
+			g.joinButton,
+			g.cancelButton,
 		},
 	})
-	game.style = opt.Style
-	return &game
+
+	return g
 }
 
 func (g *JoinGame) Init() tea.Cmd {
@@ -289,3 +320,5 @@ func (g *JoinGame) View() tea.View {
 	v.AltScreen = true
 	return v
 }
+
+const ACCOUNT_WIDTH = 32
